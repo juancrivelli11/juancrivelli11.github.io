@@ -1197,7 +1197,16 @@ function renderCash(pf, broker){
     });
     cashAssets = Object.values(cashMap).filter(a=>a.qty>0).map(a=>({...a,brkList:[broker]}));
   } else {
-    cashAssets = pf.filter(a=>isCash(a.ticker));
+    // Recalculate cash from all orders to ensure accuracy
+    const cashMap={};
+    orders.forEach(o=>{
+      if(!isCash(o.ticker)) return;
+      const t=o.ticker.toUpperCase();
+      if(!cashMap[t]) cashMap[t]={ticker:t,qty:0,brkList:[]};
+      cashMap[t].qty += o.action==='Compra' ? o.qty : -o.qty;
+      if(o.broker && !cashMap[t].brkList.includes(o.broker)) cashMap[t].brkList.push(o.broker);
+    });
+    cashAssets = Object.values(cashMap).filter(a=>a.qty>0.001).map(a=>({...a,hasPx:true,value:a.qty,cost:a.qty}));
   }
   const cashSection = document.getElementById('cashSection');
   const cashCards = document.getElementById('cashCards');
@@ -1311,7 +1320,7 @@ function renderOrders(){
     div.innerHTML=`<div class="ord-row">
       <div class="ord-left">
         <span class="ord-badge ${o.action==='Compra'?'buy':'sell'}">${o.action}</span>
-        <div><strong>${o.ticker}</strong><div class="ord-meta">${o.date}${o.broker?' · '+o.broker:''}${o.currency==='ARS'?' · ARS':''}</div></div>
+        <div><strong style="color:var(--blue)">${o.ticker}</strong><div class="ord-meta">${o.date}${o.broker?' · '+o.broker:''}${o.currency==='ARS'?' · ARS':''}</div></div>
       </div>
       <div style="text-align:right;font-size:12px">
         <div style="font-family:monospace;font-weight:600">${n2(o.qty,4)} × ${o.currency==='ARS'?$a(o.priceOrig||o.price*ccl()):$u(o.price)}</div>
