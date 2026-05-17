@@ -82,7 +82,7 @@ body.dark canvas{filter:brightness(0.9)}
   display:flex;align-items:center;justify-content:space-between;
   position:sticky;top:0;z-index:100;box-shadow:0 1px 4px #1565c010;flex-wrap:wrap;gap:8px}
 .hdr-brand{display:flex;align-items:center;gap:12px}
-.brand{font-size:22px;font-weight:900;letter-spacing:0px;cursor:default;font-family:'Nunito',sans-serif}
+.brand{font-size:22px;font-weight:900;letter-spacing:0px;cursor:default;font-family:'Nunito',sans-serif;line-height:46px;display:flex;align-items:center}
 .brand-cri{color:#1a7fe8}.brand-fund{color:#3db544}
 .hdr-name{border-left:1px solid var(--border);padding-left:12px}
 .hdr-name h1{font-size:14px;font-weight:700;color:var(--txt);cursor:pointer}
@@ -283,10 +283,10 @@ body.dark canvas{filter:brightness(0.9)}
 <!-- HEADER -->
 <div class="hdr">
   <div class="hdr-brand">
-    <div style="display:flex;align-items:center;gap:2px">
-      <img src="logo.png" alt="CriFund" style="height:46px;width:auto;object-fit:contain;display:block;margin-bottom:-4px"
+    <div style="display:flex;flex-direction:row;align-items:center;gap:4px;line-height:1">
+      <img src="logo.png" alt="CriFund" style="height:46px;width:46px;object-fit:contain;flex-shrink:0"
         onerror="this.style.display='none'">
-      <div class="brand" style="line-height:1;align-self:center"><span class="brand-cri">Cri</span><span class="brand-fund">Fund</span></div>
+      <div class="brand"><span class="brand-cri">Cri</span><span class="brand-fund">Fund</span></div>
     </div>
     <div class="hdr-name">
       <h1 id="pfName" onclick="editName()" title="Click para editar" style="cursor:pointer">Mi Portfolio</h1>
