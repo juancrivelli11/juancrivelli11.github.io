@@ -913,6 +913,9 @@ function makeLogo(ticker, type, size=26){
 // ═══════════════════════════════════════════════════════════════════════════
 // PORTFOLIO CALC
 // ═══════════════════════════════════════════════════════════════════════════
+const CASH_LIST = ['USD','ARS','USDT','USDC','DAI','BUSD','PESOS','CASH'];
+function isCash(ticker){ return CASH_LIST.includes((ticker||'').toUpperCase()); }
+
 function getPortfolio(broker=null){
   const map={};
   const ords = broker ? orders.filter(o=>(o.broker||'').toLowerCase().trim()===(broker||'').toLowerCase().trim()) : orders;
@@ -1186,9 +1189,6 @@ function render(){
     document.getElementById('liqTotalUSD').textContent=liqUSD>0?$u(liqUSD):'$0';
   }
 }
-
-const CASH_LIST = ['USD','ARS','USDT','USDC','DAI','BUSD','PESOS','CASH'];
-function isCash(ticker){ return CASH_LIST.includes((ticker||'').toUpperCase()); }
 
 function renderCash(pf, broker){
   // If broker specified, get cash for that broker specifically
