@@ -918,7 +918,7 @@ function getPortfolio(broker=null){
   const ords = broker ? orders.filter(o=>(o.broker||'').toLowerCase().trim()===(broker||'').toLowerCase().trim()) : orders;
   if(broker) console.log(`getPortfolio(${broker}): ${ords.length} orders`, ords.map(o=>`${o.action} ${o.ticker} qty=${o.qty} broker="${o.broker}"`));
   ords.forEach(o=>{
-    if(!map[o.ticker]) map[o.ticker]={ticker:o.ticker,type:isCash(o.ticker)?'__cash__':(o.type||'Acción USA'),qty:0,cost:0,comm:0};
+    if(!map[o.ticker]) map[o.ticker]={ticker:o.ticker,type:o.type||'Acción USA',qty:0,cost:0,comm:0};
     const m=map[o.ticker];
     if(o.action==='Compra'){m.qty+=o.qty;m.cost+=o.qty*o.price+(o.comm||0);m.comm+=(o.comm||0);}
     else{const r=m.qty>0?o.qty/m.qty:0;m.cost-=m.cost*r;m.qty-=o.qty;}
@@ -1300,7 +1300,7 @@ function renderTable(pf, containerId, totVal, totPnL){
   // Determine display currency based on container
   const _isARSCtx = containerId==='brokerDetailTable';
   // Only sum non-cash assets in the total row (cash shown separately in liquidez section)
-  const _pfNoCash = pf.filter(a=>a.type!=='__cash__'&&!isCash(a.ticker));
+  const _pfNoCash = pf.filter(a=>!isCash(a.ticker));
   const _arsTotal = _isARSCtx
     ? _pfNoCash.reduce((s,a)=>{const v=a.hasPx?a.value:a.cost;return s+(isARS(a.type)?v*_c:v*_mep);},0)
     : _pfNoCash.filter(a=>isARS(a.type)).reduce((s,a)=>s+(a.hasPx?a.value:a.cost)*_c,0);
