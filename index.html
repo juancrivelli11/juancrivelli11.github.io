@@ -548,6 +548,7 @@ body.dark canvas{filter:brightness(0.9)}
         <option value="arg">Acción Argentina</option>
         <option value="cripto">Cripto</option>
         <option value="bono">Bono / Renta Fija</option>
+        <option value="liquidez">💰 Liquidez (USD/ARS/USDT)</option>
       </select>
     </div>
     <div class="field"><label>Ticker</label>
@@ -678,6 +679,10 @@ const TICKERS = {
     {t:'BTC',n:'Bitcoin'},{t:'ETH',n:'Ethereum'},{t:'SOL',n:'Solana'},
     {t:'BNB',n:'BNB'},{t:'XRP',n:'Ripple'},{t:'ADA',n:'Cardano'},
     {t:'DOGE',n:'Dogecoin'},{t:'USDT',n:'Tether'},{t:'MATIC',n:'Polygon'},
+  ],
+  liquidez:[
+    {t:'USD',n:'Dólares en cuenta'},{t:'ARS',n:'Pesos en cuenta'},
+    {t:'USDT',n:'Tether'},{t:'USDC',n:'USD Coin'},{t:'DAI',n:'DAI'},
   ],
   bono:[
     {t:'GD30',n:'Global 2030'},{t:'GD35',n:'Global 2035'},
@@ -913,7 +918,7 @@ function getPortfolio(broker=null){
   const ords = broker ? orders.filter(o=>(o.broker||'').toLowerCase().trim()===(broker||'').toLowerCase().trim()) : orders;
   if(broker) console.log(`getPortfolio(${broker}): ${ords.length} orders`, ords.map(o=>`${o.action} ${o.ticker} qty=${o.qty} broker="${o.broker}"`));
   ords.forEach(o=>{
-    if(!map[o.ticker]) map[o.ticker]={ticker:o.ticker,type:o.type||'Acción USA',qty:0,cost:0,comm:0};
+    if(!map[o.ticker]) map[o.ticker]={ticker:o.ticker,type:isCash(o.ticker)?'__cash__':(o.type||'Acción USA'),qty:0,cost:0,comm:0};
     const m=map[o.ticker];
     if(o.action==='Compra'){m.qty+=o.qty;m.cost+=o.qty*o.price+(o.comm||0);m.comm+=(o.comm||0);}
     else{const r=m.qty>0?o.qty/m.qty:0;m.cost-=m.cost*r;m.qty-=o.qty;}
@@ -1704,6 +1709,7 @@ function onMarketChange(){el('oTicker').value='';hideAC();updatePriceCurrency();
 function updatePriceCurrency(){
   const mktVal=el('oMarket').value;
   const isA=(mktVal==='cedear'||mktVal==='arg'||mktVal==='bono');
+  const isLiq=(mktVal==='liquidez');
   el('oPriceLbl').textContent=isA?'Precio (ARS)':'Precio (USD)';
   el('oPriceCur').textContent=isA?'ARS':'USD';
   el('oPriceCur').style.color=isA?'var(--gold)':'var(--muted)';
@@ -1753,7 +1759,7 @@ function saveOrder(){
   }
 
   const mktVal=el('oMarket').value;
-  const typeMap={usa:'Acción USA',cedear:'CEDEAR',arg:'Acción Argentina',cripto:'Cripto',bono:'Bono/Renta Fija'};
+  const typeMap={usa:'Acción USA',cedear:'CEDEAR',arg:'Acción Argentina',cripto:'Cripto',bono:'Bono/Renta Fija',liquidez:'Acción USA'};
   const type=isVenta?(getPortfolio().find(a=>a.ticker===ticker)?.type||'Acción USA'):(typeMap[mktVal]||'Acción USA');
   const isA=isARS(type);  // ARS applies to both buy and sell for CEDEARs/arg assets
   const c=ccl();
