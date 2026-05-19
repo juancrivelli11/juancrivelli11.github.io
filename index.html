@@ -55,7 +55,9 @@ body.dark .kpi-card label{color:#7a95c0}
 body.dark .ac-list{background:#0d1520;border-color:#1e2d45}
 body.dark .ac-item{border-color:#1a2236;color:#e8f0fe}
 body.dark .ac-item:hover{background:#111827}
-body.dark .ord-card{background:#0d1520;border-color:#1e2d45}
+body.dark .ord-card{background:#0d1520;border-color:#1e2d45;color:#e8f0fe}
+body.dark .ord-card strong{color:#90caf9}
+body.dark .ord-card .ord-row > div > div[style*="font-family:monospace"]{color:#90caf9}
 body.dark .add-broker input{background:#111827;border-color:#1e2d45;color:#e8f0fe}
 body.dark .asset-menu{background:#0d1520;border-color:#1e2d45}
 body.dark .asset-menu div{border-color:#1a2236;color:#e8f0fe}
@@ -76,7 +78,6 @@ body.dark .ord-meta{color:#7a95c0}
 body.dark .kpi-row .kpi-card{background:#111827}
 body.dark .chart-full{background:#0d1520}
 body.dark canvas{filter:brightness(0.9)}
-
 /* HEADER */
 .hdr{background:#fff;border-bottom:1px solid var(--border);padding:10px 16px;
   display:flex;align-items:center;justify-content:space-between;
@@ -94,7 +95,6 @@ body.dark canvas{filter:brightness(0.9)}
 .btn-blue{background:var(--blueL);color:var(--blue);border:1px solid var(--border)}
 .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}
 .btn-gold{background:#fff8e1;color:var(--gold);border:1px solid #ffe082}
-
 /* SUMMARY */
 .summary{display:flex;gap:8px;flex-wrap:wrap;padding:10px 16px 0}
 .sc{background:var(--card);border:1px solid var(--border);border-radius:10px;
@@ -109,7 +109,6 @@ body.dark canvas{filter:brightness(0.9)}
 .fx-box{display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
 .fx-item label{font-size:9px;color:var(--muted);text-transform:uppercase;display:block}
 .fx-item .val{font-size:13px;color:var(--gold)}
-
 /* TABS */
 .tabs-bar{padding:10px 16px 0}
 .tabs{display:inline-flex;gap:2px;background:var(--blueL);padding:3px;
@@ -118,20 +117,16 @@ body.dark canvas{filter:brightness(0.9)}
   font-weight:600;font-size:12px;font-family:inherit;
   background:transparent;color:var(--muted);white-space:nowrap}
 .tab.active{background:var(--green);color:#fff}
-
 /* BODY */
 .body-wrap{display:flex;gap:12px;padding:10px 16px 50px;align-items:flex-start}
 .main{flex:1;min-width:0}
 .sidebar{width:260px;flex-shrink:0;position:sticky;top:60px;
   max-height:calc(100vh - 72px);overflow-y:auto}
 @media(max-width:900px){.body-wrap{flex-direction:column}.sidebar{width:100%;position:static;max-height:none}}
-
 .page{display:none}.page.active{display:block}
-
 /* SECTION */
 .sec-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .sec-title{font-size:11px;color:var(--muted);font-weight:700;letter-spacing:1px}
-
 /* TABLE */
 .tbl-wrap{overflow-x:auto;border-radius:10px;border:1px solid var(--border);
   background:var(--card);box-shadow:0 1px 4px #1565c008}
@@ -158,7 +153,6 @@ body.dark canvas{filter:brightness(0.9)}
 .ainfo .brks{margin-top:2px}
 .brk-tag{font-size:9px;background:var(--blueL);color:var(--blue);
   padding:1px 5px;border-radius:3px;margin-right:2px;font-weight:600}
-
 /* ORDERS */
 .ord-card{background:var(--card);border-radius:10px;padding:10px 12px;
   margin-bottom:7px;border:1px solid var(--border)}
@@ -170,7 +164,6 @@ body.dark canvas{filter:brightness(0.9)}
 .ord-badge.buy{background:#e8fdf5;color:var(--green)}
 .ord-badge.sell{background:#fff0f0;color:var(--red)}
 .ord-meta{font-size:11px;color:var(--muted);margin-top:2px}
-
 /* BROKERS */
 .broker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
 .broker-card{background:var(--card);border:1px solid var(--border);border-radius:10px;
@@ -184,7 +177,6 @@ body.dark canvas{filter:brightness(0.9)}
 .add-broker{display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px dashed var(--border)}
 .add-broker input{flex:1;background:var(--bg);border:1px solid var(--border);
   border-radius:7px;padding:9px 12px;color:var(--txt);font-size:13px;outline:none;font-family:inherit}
-
 /* CHARTS */
 .chart-box{background:var(--card);border:1px solid var(--border);border-radius:10px;
   padding:13px;margin-bottom:12px;box-shadow:0 1px 3px #1565c008}
@@ -193,7 +185,6 @@ body.dark canvas{filter:brightness(0.9)}
 .pie-legend{flex:1;font-size:11px}
 .pie-row{display:flex;justify-content:space-between;margin-bottom:7px}
 .pie-dot{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:6px}
-
 /* BROKER DETAIL CHARTS */
 .kpi-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:9px;
@@ -204,7 +195,6 @@ body.dark canvas{filter:brightness(0.9)}
 .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .charts-grid .chart-box{margin-bottom:0}
 .chart-full{grid-column:1/-1}
-
 /* SIDEBAR */
 .side-box{background:var(--card);border:1px solid var(--border);border-radius:10px;
   margin-bottom:10px;overflow:hidden;box-shadow:0 1px 3px #1565c008}
@@ -226,7 +216,6 @@ body.dark canvas{filter:brightness(0.9)}
 .ntitle{font-size:11px;color:var(--txt);font-weight:600;line-height:1.4}
 .nmeta{font-size:10px;color:var(--muted);margin-top:2px}
 .side-msg{padding:14px 12px;text-align:center;font-size:12px;color:var(--muted)}
-
 /* MODALS */
 .overlay{display:none;position:fixed;inset:0;background:#00000055;z-index:500;
   align-items:flex-end;justify-content:center}
@@ -265,7 +254,6 @@ body.dark canvas{filter:brightness(0.9)}
 .price-cur{position:absolute;right:12px;top:50%;transform:translateY(-50%);
   font-size:11px;font-weight:700;color:var(--muted)}
 .price-hint{font-size:10px;color:var(--green);margin-top:3px}
-
 /* ASSET MENU */
 .asset-menu{display:none;position:absolute;right:0;top:100%;background:#fff;
   border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 14px #1565c018;
@@ -273,13 +261,11 @@ body.dark canvas{filter:brightness(0.9)}
 .asset-menu div{padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #f0f4f9}
 .asset-menu div:last-child{border-bottom:none}
 .asset-menu div:hover{background:var(--blueLL)}
-
 .empty{text-align:center;padding:40px 20px;color:var(--muted)}
 .empty-icon{font-size:40px;margin-bottom:8px}
 </style>
 </head>
 <body>
-
 <!-- HEADER -->
 <div class="hdr">
   <div class="hdr-brand">
@@ -304,7 +290,6 @@ body.dark canvas{filter:brightness(0.9)}
     <button class="btn btn-blue" onclick="toggleDark()" id="btnDark" title="Modo oscuro/claro" style="font-size:16px;padding:6px 10px">🌙</button>
   </div>
 </div>
-
 <!-- SUMMARY -->
 <div class="summary">
   <div class="sc sc-usd">
@@ -331,7 +316,6 @@ body.dark canvas{filter:brightness(0.9)}
     </div>
   </div>
 </div>
-
 <!-- TABS -->
 <div class="tabs-bar">
   <div class="tabs">
@@ -341,11 +325,9 @@ body.dark canvas{filter:brightness(0.9)}
     <button class="tab" onclick="goTab('charts',this)">Gráficas</button>
   </div>
 </div>
-
 <!-- BODY -->
 <div class="body-wrap">
   <div class="main">
-
     <!-- PORTFOLIO -->
     <div class="page active" id="page-portfolio">
       <div class="sec-hdr">
@@ -358,7 +340,6 @@ body.dark canvas{filter:brightness(0.9)}
         <div id="cashCards" style="display:flex;gap:8px;flex-wrap:wrap"></div>
       </div>
     </div>
-
     <!-- ORDERS -->
     <div class="page" id="page-orders">
       <div class="sec-hdr">
@@ -367,7 +348,6 @@ body.dark canvas{filter:brightness(0.9)}
       </div>
       <div id="orderList"></div>
     </div>
-
     <!-- BROKERS -->
     <div class="page" id="page-brokers">
       <div id="brokerGridView">
@@ -393,7 +373,6 @@ body.dark canvas{filter:brightness(0.9)}
         <div id="brokerDetailCharts" style="margin-top:12px"></div>
       </div>
     </div>
-
     <!-- CHARTS -->
     <div class="page" id="page-charts">
       <div class="chart-box">
@@ -420,12 +399,9 @@ body.dark canvas{filter:brightness(0.9)}
         </div>
       </div>
     </div>
-
   </div><!-- /main -->
-
   <!-- SIDEBAR -->
   <div class="sidebar">
-
     <div class="side-box" id="liquidezSummaryBox" style="display:none">
       <div class="side-hdr">💰 Liquidez Total</div>
       <div style="padding:10px 12px;display:flex;gap:8px;flex-wrap:wrap">
@@ -455,9 +431,7 @@ body.dark canvas{filter:brightness(0.9)}
       <div id="newsPanel"><div class="side-msg">Cargando...</div></div>
     </div>
   </div>
-
 </div><!-- /body-wrap -->
-
 <!-- EDIT ORDER OVERLAY -->
 <div class="overlay" id="overlay-edit">
 <div class="modal" style="max-width:420px">
@@ -491,7 +465,6 @@ body.dark canvas{filter:brightness(0.9)}
   </div>
 </div>
 </div>
-
 <!-- LOGIN OVERLAY -->
 <div class="overlay" id="overlay-login">
 <div class="modal" style="max-width:400px">
@@ -518,7 +491,6 @@ body.dark canvas{filter:brightness(0.9)}
   </p>
 </div>
 </div>
-
 <!-- ORDER MODAL -->
 <div class="overlay" id="overlay-order">
 <div class="modal">
@@ -594,7 +566,6 @@ body.dark canvas{filter:brightness(0.9)}
   </div>
 </div>
 </div>
-
 <script>
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -603,12 +574,9 @@ const AV  = '8X9MWKFC0MU3LNSY';
 const SUPA_URL = 'https://ypplfrqwspgdjwboikdz.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlwcGxmcnF3c3BnZGp3Ym9pa2R6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MzUzOTQsImV4cCI6MjA5NDExMTM5NH0.2ixCpb8i8ZIexCCM-RJwH-rvV3fOwaMasN6V1Fx-bKw';
 const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
-
 const COLS = ['#1565c0','#42a5f5','#00a876','#f59f00','#e53935','#7c3aed','#0891b2','#f97316','#14b8a6','#8b5cf6'];
-
 const ARS_BROKERS = ['Bull Market','IOL Argentina','Galicia','Santander','Balanz','PPI'];
 function isARSBroker(name){ return ARS_BROKERS.some(b=>b.toLowerCase()===name?.toLowerCase()); }
-
 const BROKER_LOGOS = {
   'IOL Dólares':   'invertironline.com',
   'IOL Argentina': 'invertironline.com',
@@ -624,13 +592,11 @@ const BROKER_LOGOS = {
   'Gate.io':       'gate.io',
   'Kucoin':        'kucoin.com',
 };
-
 function getBrokerLogo(name){
   const domain = BROKER_LOGOS[name];
   return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=32` : null;
 }
 const DEFAULT_BROKERS = ['IOL Dólares','IOL Argentina','Bull Market','Galicia','Binance','Santander','Interactive Brokers','Balanz','PPI','TDA','Lemon','Gate.io','Kucoin'];
-
 const TICKERS = {
   usa:[
     {t:'AAPL',n:'Apple'},{t:'MSFT',n:'Microsoft'},{t:'GOOGL',n:'Alphabet'},
@@ -690,7 +656,6 @@ const TICKERS = {
     {t:'TLT',n:'US Bond ETF'},
   ],
 };
-
 // ═══════════════════════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -703,18 +668,15 @@ let currency  = 'USD';
 let currentUser = null;
 let _lineChart = null, _pieChart = null, _arsUsdChart = null, _sidebarPie = null;
 let _brokerPie = null, _brokerArs = null, _brokerBar = null;
-
 function localSave(){
   localStorage.setItem('pf6_orders',   JSON.stringify(orders));
   localStorage.setItem('pf6_snaps',    JSON.stringify(snapshots));
   localStorage.setItem('pf6_brokers',  JSON.stringify(brokers));
 }
-
 async function save(){
   localSave();
   if(currentUser) await supaSync();
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // SUPABASE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -729,7 +691,6 @@ async function signIn(){
   closeOverlay('login');
   await onLogin(data.user);
 }
-
 async function signUp(){
   const email = document.getElementById('authEmail').value.trim();
   const pass  = document.getElementById('authPass').value;
@@ -741,7 +702,6 @@ async function signUp(){
   msg.style.color = 'var(--green)';
   msg.textContent = '✓ Revisá tu email para confirmar la cuenta.';
 }
-
 async function onLogin(user){
   currentUser = user;
   const btn = document.getElementById('btnAuth');
@@ -751,47 +711,66 @@ async function onLogin(user){
   btn.onclick = () => { if(confirm('Cerrar sesión?')) signOut(); };
   await supaLoad();
 }
-
+function clearAllLocalData(){
+  // Borra TODO lo que pueda contener datos del usuario logueado.
+  // Se llama en signOut() y antes de cargar datos de otra cuenta para
+  // evitar fugas de datos entre usuarios en el mismo dispositivo.
+  orders = [];
+  snapshots = [];
+  brokers = JSON.parse(JSON.stringify(DEFAULT_BROKERS));
+  prices = {};
+  mkt = {};
+  ['pf6_orders','pf6_snaps','pf6_brokers','pf6_prices','pf6_name','pf6_lastFetch'].forEach(k=>localStorage.removeItem(k));
+  document.getElementById('pfName').textContent = 'Mi Portfolio';
+}
 async function signOut(){
   await supa.auth.signOut();
   currentUser = null;
+  clearAllLocalData();
   const btn = document.getElementById('btnAuth');
   btn.textContent = 'Iniciar sesión';
   btn.style.background = '';
   btn.style.color = '';
   btn.onclick = handleAuth;
   render();
+  setStatus('Sesión cerrada · datos locales borrados', false);
 }
-
 async function supaLoad(){
   if(!currentUser) return;
   try{
+    // La nube es la única fuente de verdad: vaciamos lo local primero
+    // así una cuenta sin datos no "hereda" lo que dejó otro usuario.
+    orders = [];
+    snapshots = [];
+    brokers = JSON.parse(JSON.stringify(DEFAULT_BROKERS));
     const { data: ords } = await supa.from('orders').select('*')
       .eq('user_id', currentUser.id).order('created_at');
     if(ords?.length){
-      // Use Supabase as source of truth — no merge to avoid duplicates
       orders = ords.map(o => o.data);
     }
-
     const { data: snaps } = await supa.from('snapshots').select('*')
       .eq('user_id', currentUser.id).order('date');
-    if(snaps) snapshots = snaps.map(s => ({date:s.date, usd:s.usd}));
-
+    if(snaps?.length) snapshots = snaps.map(s => ({date:s.date, usd:s.usd}));
     const { data: set } = await supa.from('settings').select('*')
       .eq('user_id', currentUser.id).single();
     if(set){
       if(set.brokers) brokers = set.brokers;
       if(set.portfolio_name){
         localStorage.setItem('pf6_name', set.portfolio_name);
-        document.getElementById('pfName').textContent = set.portfolio_name ;
+        document.getElementById('pfName').textContent = set.portfolio_name;
+      } else {
+        document.getElementById('pfName').textContent = 'Mi Portfolio';
+        localStorage.removeItem('pf6_name');
       }
+    } else {
+      document.getElementById('pfName').textContent = 'Mi Portfolio';
+      localStorage.removeItem('pf6_name');
     }
     localSave();
     render();
     setStatus('☁ Datos cargados desde la nube', false);
   }catch(e){ console.log('Load error:', e); }
 }
-
 async function supaSync(){
   if(!currentUser) return;
   try{
@@ -807,27 +786,36 @@ async function supaSync(){
     }, {onConflict:'user_id'});
   }catch(e){ console.log('Sync error:', e); }
 }
-
 async function supaSnap(date, usd){
   if(!currentUser) return;
   try{
     await supa.from('snapshots').upsert({user_id:currentUser.id, date, usd}, {onConflict:'user_id,date'});
   }catch(e){}
 }
-
 function handleAuth(){ openOverlay('login'); }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // FORMAT & HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 function n2(n,d=2){ return isNaN(n)||n==null?'—':new Intl.NumberFormat('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d}).format(n); }
+// Cantidad con decimales adaptativos según el tipo de activo y la magnitud.
+// Cripto: hasta 8 decimales (BTC, ETH suelen tener cifras chicas).
+// Resto: 2 decimales si es entero, 4 si fraccional, 6 si muy chico.
+function fmtQty(n, type){
+  if(n==null||isNaN(n)) return '—';
+  if(type==='Cripto'){
+    return new Intl.NumberFormat('es-AR',{minimumFractionDigits:2,maximumFractionDigits:8}).format(n);
+  }
+  const abs=Math.abs(n);
+  if(abs>=1) return n2(n, Number.isInteger(n)?2:4);
+  if(abs>=0.01) return n2(n,4);
+  return n2(n,6);
+}
 const $u = n => `$${n2(n)}`;
 const $a = n => `$${n2(n,0)}`;
 const pc = n => `${n>=0?'+':''}${n2(n)}%`;
 const ccl = () => mkt.dccl?.price || mkt.dblue?.price || 1480;
 const isARS = t => t==='CEDEAR'||t==='Acción Argentina'||t==='Bono/Renta Fija';
 const dv = v => currency==='USD' ? $u(v) : $a(v * ccl());
-
 // ═══════════════════════════════════════════════════════════════════════════
 // LOGO
 // ═══════════════════════════════════════════════════════════════════════════
@@ -875,7 +863,6 @@ const CG = {
   AAVE:'12645/aave-token-round',
 };
 const CG_URL = 'https://assets.coingecko.com/coins/images/';
-
 // CoinGecko IDs for price fetching
 const CG_IDS = {
   BTC:'bitcoin',ETH:'ethereum',SOL:'solana',BNB:'binancecoin',
@@ -887,7 +874,6 @@ const CG_IDS = {
   ORDI:'ordinals',JUP:'jupiter-exchange-solana',LDO:'lido-dao',
   IOTA:'iota',ARB:'arbitrum',AAVE:'aave',
 };
-
 function makeLogo(ticker, type, size=26){
   const c = COLS[(ticker||'?').charCodeAt(0)%COLS.length];
   const init = (ticker||'?').slice(0,2).toUpperCase();
@@ -895,7 +881,6 @@ function makeLogo(ticker, type, size=26){
   fb.className='alogo-fb';
   fb.style.cssText=`width:${size}px;height:${size}px;font-size:${Math.round(size*.36)}px;background:${c}22;color:${c};border:1px solid ${c}44`;
   fb.textContent=init;
-
   let src = null;
   if(type==='Cripto' && CG[ticker?.toUpperCase()]){
     const cgEntry=CG[ticker?.toUpperCase()]; src=cgEntry?`${CG_URL}${cgEntry}.png`:null;
@@ -909,13 +894,11 @@ function makeLogo(ticker, type, size=26){
   img.onerror=()=>img.replaceWith(fb);
   return img;
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // PORTFOLIO CALC
 // ═══════════════════════════════════════════════════════════════════════════
 const CASH_LIST = ['USD','ARS','USDT','USDC','DAI','BUSD','PESOS','CASH'];
 function isCash(ticker){ return CASH_LIST.includes((ticker||'').toUpperCase()); }
-
 function getPortfolio(broker=null){
   const map={};
   const ords = broker ? orders.filter(o=>(o.broker||'').toLowerCase().trim()===(broker||'').toLowerCase().trim()) : orders;
@@ -928,7 +911,6 @@ function getPortfolio(broker=null){
   });
   return Object.values(map).filter(a=>a.qty>0.0001).map(a=>({...a,avgPrice:a.qty>0?a.cost/a.qty:0}));
 }
-
 function enrich(pf){
   const c=ccl();
   return pf.map(a=>{
@@ -948,7 +930,6 @@ function enrich(pf){
     return{...a,price,priceARS,prev,hasPx,value,pnl,pnlPct,dayPct,dayDol,brkList};
   });
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // PRICE FETCH
 // ═══════════════════════════════════════════════════════════════════════════
@@ -976,7 +957,6 @@ async function fetchArgPrice(ticker){
   }
   return null;
 }
-
 async function fetchUSPrice(sym){
   const fmp=localStorage.getItem('pf6_fmp')||'';
   if(fmp){
@@ -1007,7 +987,6 @@ async function fetchUSPrice(sym){
   }catch(e){}
   return null;
 }
-
 async function doRefresh(force=false){
   const pf=getPortfolio();
   if(!pf.length){setStatus('Sin activos',false);return;}
@@ -1022,7 +1001,6 @@ async function doRefresh(force=false){
   setStatus('Obteniendo precios...',true);
   document.getElementById('btnRef').textContent='...';
   document.getElementById('btnRef').disabled=true;
-
   // Crypto
   const cryptos=pf.filter(a=>a.type==='Cripto');
   if(cryptos.length){
@@ -1036,7 +1014,6 @@ async function doRefresh(force=false){
       });
     }catch(e){}
   }
-
   // Argentine assets
   const argAssets=pf.filter(a=>isARS(a.type));
   for(const a of argAssets){
@@ -1047,7 +1024,6 @@ async function doRefresh(force=false){
     const data=await fetchArgPrice(a.ticker);
     if(data?.price>0){prices[a.ticker]=data.price;prices[a.ticker+'_prev']=data.prev;prices[a.ticker+'_ars']=true;}
   }
-
   // US assets
   const STABLE = ['USD','USDC','BUSD','DAI'];
   const usAssets=pf.filter(a=>!isARS(a.type)&&a.type!=='Cripto');
@@ -1055,7 +1031,6 @@ async function doRefresh(force=false){
   usAssets.filter(a=>STABLE.includes(a.ticker.toUpperCase())).forEach(a=>{
     prices[a.ticker]=1;prices[a.ticker+'_prev']=1;
   });
-
   // Batch FMP request - single call for all tickers
   const fmp=localStorage.getItem('pf6_fmp')||'';
   if(fmp && toFetch.length){
@@ -1094,12 +1069,10 @@ async function doRefresh(force=false){
       if(data?.price>0){prices[a.ticker]=data.price;prices[a.ticker+'_prev']=data.prev;}
     }
   }
-
   // Dolar
   try{const r=await fetch('https://dolarapi.com/v1/dolares/blue');const d=await r.json();if(d.venta>100)mkt.dblue={price:d.venta,buy:d.compra};}catch(e){}
   try{const r=await fetch('https://dolarapi.com/v1/dolares/bolsa');const d=await r.json();if(d.venta>100)mkt.dmep={price:d.venta,buy:d.compra};}catch(e){}
   try{const r=await fetch('https://dolarapi.com/v1/dolares/contadoconliqui');const d=await r.json();if(d.venta>100)mkt.dccl={price:d.venta,buy:d.compra};}catch(e){}
-
   // Snapshot
   const today=new Date().toISOString().slice(0,10);
   const c=ccl();
@@ -1111,23 +1084,19 @@ async function doRefresh(force=false){
   snapshots=[...snapshots.filter(s=>s.date!==today),{date:today,usd:total}].slice(-365);
   localSave();
   if(currentUser) await supaSnap(today,total);
-
   const got=pf.filter(a=>prices[a.ticker]>0).length;
   localStorage.setItem('pf6_lastFetch', Date.now().toString());
   localStorage.setItem('pf6_prices', JSON.stringify(prices));
   setStatus(`${got}/${pf.length} precios · Blue $${n2(mkt.dblue?.price||0,0)} · MEP $${n2(mkt.dmep?.price||0,0)} · CCL $${n2(mkt.dccl?.price||0,0)}`,false);
   document.getElementById('btnRef').textContent='↻ Actualizar';
   document.getElementById('btnRef').disabled=false;
-
   // Update fx display
   document.getElementById('sBlue').textContent=mkt.dblue?`$${n2(mkt.dblue.price,0)}`:'$—';
   document.getElementById('sMep').textContent=mkt.dmep?`$${n2(mkt.dmep.price,0)}`:'$—';
   document.getElementById('sCcl').textContent=mkt.dccl?`$${n2(mkt.dccl.price,0)}`:'$—';
-
   render();
   loadSidebar();
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // RENDER
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1138,7 +1107,6 @@ function render(){
   const pfCash = pf.filter(a=>isCash(a.ticker));
   const c=ccl();
   const isARSt=isARS;
-
   const pfUSD=pfInv.filter(a=>!isARSt(a.type));
   const pfARS=pfInv.filter(a=>isARSt(a.type));
   const c2=ccl();
@@ -1152,7 +1120,6 @@ function render(){
   const pnlARS=totARS_usd-costARS_usd;
   const totGlobal=totUSD_usd+totARS_usd+cashUSD+cashARSusd;
   const pnlGlobal=pnlUSD+pnlARS;
-
   // Summary
   el('sValUSD').textContent=$u(totUSD_usd);
   el('sPnlUSD').textContent=`P&L: ${pnlUSD>=0?'+':''}${$u(pnlUSD)}`;
@@ -1166,19 +1133,11 @@ function render(){
   el('sBlue').textContent=mkt.dblue?`$${n2(mkt.dblue.price,0)}`:'$—';
   el('sMep').textContent=mkt.dmep?`$${n2(mkt.dmep.price,0)}`:'$—';
   el('sCcl').textContent=mkt.dccl?`$${n2(mkt.dccl.price,0)}`:'$—';
-
   renderTable(pfInv, 'assetTable', totUSD_usd+totARS_usd, pnlGlobal);
   renderOrders();
   renderBrokerGrid();
-// Pre-fetch dolar rates on startup
-(async()=>{
-  try{const r=await fetch('https://dolarapi.com/v1/dolares/blue');const d=await r.json();if(d.venta>100){mkt.dblue={price:d.venta,buy:d.compra};document.getElementById('sBlue').textContent='$'+Math.round(d.venta);}}catch(e){}
-  try{const r=await fetch('https://dolarapi.com/v1/dolares/bolsa');const d=await r.json();if(d.venta>100){mkt.dmep={price:d.venta,buy:d.compra};document.getElementById('sMep').textContent='$'+Math.round(d.venta);}}catch(e){}
-  try{const r=await fetch('https://dolarapi.com/v1/dolares/contadoconliqui');const d=await r.json();if(d.venta>100){mkt.dccl={price:d.venta,buy:d.compra};document.getElementById('sCcl').textContent='$'+Math.round(d.venta);}}catch(e){}
-})();
   renderMainCharts(pf, totGlobal, totARS_usd, totUSD_usd, c);
   renderSidebarPie(pfInv, 'Portfolio', totGlobal);
-
   // Liquidity summary
   const liqARS = pfCash.filter(a=>a.ticker.toUpperCase()==='ARS').reduce((s,a)=>s+a.qty,0);
   const liqUSD = pfCash.filter(a=>a.ticker.toUpperCase()!=='ARS').reduce((s,a)=>s+a.qty*(prices[a.ticker]||1),0);
@@ -1189,7 +1148,6 @@ function render(){
     document.getElementById('liqTotalUSD').textContent=liqUSD>0?$u(liqUSD):'$0';
   }
 }
-
 function renderCash(pf, broker){
   // If broker specified, get cash for that broker specifically
   let cashAssets;
@@ -1231,7 +1189,6 @@ function renderCash(pf, broker){
     </div>`;
   }).join('');
 }
-
 function renderTable(pf, containerId, totVal, totPnL){
   // Separate cash from investments
   if(containerId==='assetTable') renderCash(pf, null);
@@ -1253,9 +1210,7 @@ function renderTable(pf, containerId, totVal, totPnL){
     const priceStr=a.hasPx?(isARS(a.type)?$a(a.priceARS):$u(a.price)):'—';
     const ppcStr=isARS(a.type)?$a(a.avgPrice*c):$u(a.avgPrice);
     const totStr=a.hasPx?(isARS(a.type)?$a(a.value*c):$u(a.value)):'—';
-
     const tr=document.createElement('tr');
-
     // Asset cell
     const td=document.createElement('td');
     const cell=document.createElement('div');cell.className='asset-cell';
@@ -1268,9 +1223,8 @@ function renderTable(pf, containerId, totVal, totPnL){
       info.appendChild(bd);
     }
     cell.appendChild(info);td.appendChild(cell);tr.appendChild(td);
-
     tr.innerHTML+=`
-      <td>${n2(a.qty,2)}</td>
+      <td>${fmtQty(a.qty,a.type)}</td>
       <td class="${a.hasPx&&a.price>a.avgPrice?'up':a.hasPx&&a.price<a.avgPrice?'dn':''}">${priceStr}</td>
       <td class="${dc}">${a.dayPct!=null?pc(a.dayPct):'—'}</td>
       <td class="${dc}">${a.dayDol!=null?(a.dayDol>=0?'+':'')+( isARS(a.type)?$a(a.dayDol*c):$u(a.dayDol) ):'—'}</td>
@@ -1291,6 +1245,8 @@ function renderTable(pf, containerId, totVal, totPnL){
     tr.cells[0].replaceWith(td);
     tbody.appendChild(tr);
   });
+  // Only sum non-cash assets in the total row (cash shown separately in liquidez section)
+  const _pfNoCash = pf.filter(a=>!isCash(a.ticker));
   const _totPnL = _pfNoCash.reduce((s,a)=>s+(a.pnl||0),0);
   const tot=document.createElement('tr');tot.className='tot-row';
   const pnlClass=_totPnL>=0?'up':'dn';
@@ -1299,8 +1255,6 @@ function renderTable(pf, containerId, totVal, totPnL){
   const _mep = mkt.dmep?.price || _c;
   // Determine display currency based on container
   const _isARSCtx = containerId==='brokerDetailTable';
-  // Only sum non-cash assets in the total row (cash shown separately in liquidez section)
-  const _pfNoCash = pf.filter(a=>!isCash(a.ticker));
   const _arsTotal = _isARSCtx
     ? _pfNoCash.reduce((s,a)=>{const v=a.hasPx?a.value:a.cost;return s+(isARS(a.type)?v*_c:v*_mep);},0)
     : _pfNoCash.filter(a=>isARS(a.type)).reduce((s,a)=>s+(a.hasPx?a.value:a.cost)*_c,0);
@@ -1315,7 +1269,6 @@ function renderTable(pf, containerId, totVal, totPnL){
   tbl.appendChild(tbody);wrap.appendChild(tbl);
   el2.innerHTML='';el2.appendChild(wrap);
 }
-
 function renderOrders(){
   const el2=el('orderList');
   const sorted=[...orders].sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -1331,7 +1284,7 @@ function renderOrders(){
         <div><strong style="color:var(--blue)">${o.ticker}</strong><div class="ord-meta">${o.date}${o.broker?' · '+o.broker:''}${o.currency==='ARS'?' · ARS':''}</div></div>
       </div>
       <div style="text-align:right;font-size:12px">
-        <div style="font-family:monospace;font-weight:600">${n2(o.qty,4)} × ${o.currency==='ARS'?$a(o.priceOrig||o.price*ccl()):$u(o.price)}</div>
+        <div style="font-family:monospace;font-weight:600">${fmtQty(o.qty,o.type)} × ${o.currency==='ARS'?$a(o.priceOrig||o.price*ccl()):$u(o.price)}</div>
         <div style="color:var(--muted)">Total: ${$u(total)}</div>
       </div>
     </div>
@@ -1342,7 +1295,6 @@ function renderOrders(){
     el2.appendChild(div);
   });
 }
-
 function renderBrokerGrid(){
   const grid=el('brokerGrid');
   const sel=el('oBroker');
@@ -1354,7 +1306,7 @@ function renderBrokerGrid(){
     card.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:start">
         <h4 style="flex:1">${b}</h4>
-        <button onclick="event.stopPropagation();deleteBroker('${b}')" 
+        <button onclick="event.stopPropagation();deleteBroker('${b}')"
           style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1;padding:0 0 0 6px"
           title="Eliminar broker">✕</button>
       </div>
@@ -1364,13 +1316,11 @@ function renderBrokerGrid(){
     sel.innerHTML+=`<option value="${b}">${b}</option>`;
   });
 }
-
 function showBrokerDetail(name){
   el('brokerGridView').style.display='none';
   el('brokerDetailView').style.display='block';
   const bLogo=getBrokerLogo(name);
   el('brokerDetailTitle').innerHTML=(bLogo?`<img src="${bLogo}" style="width:16px;height:16px;border-radius:3px;vertical-align:middle;margin-right:5px" onerror="this.style.display='none'">`:'')+name.toUpperCase();
-
   const pf=enrich(getPortfolio(name));
   const c=ccl();
   // Use cost as fallback when price not available
@@ -1382,12 +1332,10 @@ function showBrokerDetail(name){
   const usdVal=pf.filter(a=>!isARS(a.type)).reduce((s,a)=>s+(a.hasPx?a.value:a.cost),0);
   // Use value or cost for pie chart
   const pd=pf.map(a=>({name:a.ticker,value:a.hasPx?a.value:a.cost})).filter(a=>a.value>0);
-
   const kpiEl=el('brokerDetailKpi');
   kpiEl.innerHTML='';
   const chartsEl=el('brokerDetailCharts');
   chartsEl.innerHTML='';
-
   // KPI row
   const kpi=document.createElement('div');kpi.className='kpi-row';
   const c3=ccl();
@@ -1409,23 +1357,19 @@ function showBrokerDetail(name){
     kpi.appendChild(d);
   });
   kpiEl.appendChild(kpi);
-
   // Charts grid
   const grid=document.createElement('div');grid.className='charts-grid';
-
   // Pie composición
   const pieBox=document.createElement('div');pieBox.className='chart-box';
   pieBox.innerHTML='<h3>Composición</h3>';
   const pieWrap=document.createElement('div');pieWrap.style.cssText='display:flex;gap:10px;align-items:center';
   const pieC=document.createElement('canvas');pieC.width=110;pieC.height=110;
   const pieLeg=document.createElement('div');pieLeg.style.cssText='flex:1;font-size:10px';
-  // pd already defined above
   pd.forEach((d,i)=>{pieLeg.innerHTML+=`<div class="pie-row" style="display:flex;justify-content:space-between;margin-bottom:4px"><div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${COLS[i%COLS.length]};margin-right:5px"></span><strong style="color:var(--blue)">${d.name}</strong></div><span style="color:var(--muted)">${n2(totVal>0?d.value/totVal*100:0)}%</span></div>`;});
   pieWrap.appendChild(pieC);pieWrap.appendChild(pieLeg);pieBox.appendChild(pieWrap);
   if(_brokerPie) _brokerPie.destroy();
   if(pd.length) _brokerPie=new Chart(pieC,{type:'doughnut',data:{labels:pd.map(d=>d.name),datasets:[{data:pd.map(d=>d.value),backgroundColor:COLS,borderWidth:2,borderColor:'#f5f7fa'}]},options:{responsive:false,plugins:{legend:{display:false}}}});
   grid.appendChild(pieBox);
-
   // ARS vs USD
   const arsBox=document.createElement('div');arsBox.className='chart-box';
   arsBox.innerHTML='<h3>ARS vs USD</h3>';
@@ -1440,7 +1384,6 @@ function showBrokerDetail(name){
   if(_brokerArs) _brokerArs.destroy();
   _brokerArs=new Chart(arsC,{type:'doughnut',data:{labels:['ARS','USD'],datasets:[{data:[arsVal,usdVal],backgroundColor:['#f59f00','#1565c0'],borderWidth:2,borderColor:'#f5f7fa'}]},options:{responsive:false,plugins:{legend:{display:false}}}});
   grid.appendChild(arsBox);
-
   // Bar rendimiento
   const barBox=document.createElement('div');barBox.className='chart-box chart-full';
   barBox.innerHTML='<h3>Rendimiento % por activo</h3>';
@@ -1454,7 +1397,6 @@ function showBrokerDetail(name){
     data:{labels:pfPnl.map(a=>a.ticker),datasets:[{data:pfPnl.map(a=>a.pnlPct||0),backgroundColor:pfPnl.map(a=>(a.pnlPct||0)>=0?'#00a87666':'#e5393566'),borderColor:pfPnl.map(a=>(a.pnlPct||0)>=0?'#00a876':'#e53935'),borderWidth:1}]},
     options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6b8cba',font:{size:10}},grid:{display:false}},y:{ticks:{color:'#6b8cba',callback:v=>`${v}%`},grid:{color:'#eef2f9'}}}}
   });
-
   // Line chart: global portfolio evolution
   const lineBox=document.createElement('div');lineBox.className='chart-box';
   lineBox.innerHTML='<h3>Evolución del portfolio global (90 días)</h3>';
@@ -1480,7 +1422,6 @@ function showBrokerDetail(name){
   renderSidebarPie(pf, name, totVal);
   chartsEl.appendChild(grid);
 }
-
 function hideBrokerDetail(){
   el('brokerGridView').style.display='block';
   el('brokerDetailView').style.display='none';
@@ -1489,12 +1430,10 @@ function hideBrokerDetail(){
   const tot=pf.reduce((s,a)=>s+(a.hasPx?a.value:a.cost),0);
   renderSidebarPie(pf,'Portfolio',tot);
 }
-
 function renderBrokerCash(brokerName){
   const liqDiv = document.getElementById('brokerLiquidez');
   const liqCards = document.getElementById('brokerLiquidezCards');
   if(!liqDiv||!liqCards) return;
-
   // Get cash orders for this broker
   const brokerOrders = orders.filter(o=>
     (o.broker||'').toLowerCase()===brokerName.toLowerCase() && isCash(o.ticker)
@@ -1506,11 +1445,9 @@ function renderBrokerCash(brokerName){
     cashMap[t].qty += o.action==='Compra' ? o.qty : -o.qty;
   });
   const cashList = Object.values(cashMap).filter(a=>a.qty>0.001);
-
   if(!cashList.length){ liqDiv.style.display='none'; return; }
   liqDiv.style.display='block';
   const c=ccl();
-
   liqCards.innerHTML = cashList.map(a=>{
     const isArsT = a.ticker==='ARS';
     const valueUSD = isArsT ? a.qty/c : a.qty*(prices[a.ticker]||1);
@@ -1522,18 +1459,15 @@ function renderBrokerCash(brokerName){
     </div>`;
   }).join('');
 }
-
 function addBroker(){
   const name=el('newBrokerInput').value.trim();
-  if(name&&!brokers.includes(name)){brokers.push(name);save();renderBrokerGrid();
-// Pre-fetch dolar rates on startup
-(async()=>{
-  try{const r=await fetch('https://dolarapi.com/v1/dolares/blue');const d=await r.json();if(d.venta>100){mkt.dblue={price:d.venta,buy:d.compra};document.getElementById('sBlue').textContent='$'+Math.round(d.venta);}}catch(e){}
-  try{const r=await fetch('https://dolarapi.com/v1/dolares/bolsa');const d=await r.json();if(d.venta>100){mkt.dmep={price:d.venta,buy:d.compra};document.getElementById('sMep').textContent='$'+Math.round(d.venta);}}catch(e){}
-  try{const r=await fetch('https://dolarapi.com/v1/dolares/contadoconliqui');const d=await r.json();if(d.venta>100){mkt.dccl={price:d.venta,buy:d.compra};document.getElementById('sCcl').textContent='$'+Math.round(d.venta);}}catch(e){}
-})();el('newBrokerInput').value='';}
+  if(name&&!brokers.includes(name)){
+    brokers.push(name);
+    save();
+    renderBrokerGrid();
+    el('newBrokerInput').value='';
+  }
 }
-
 function deleteBroker(name){
   const count=orders.filter(o=>o.broker===name).length;
   const msg=count>0
@@ -1541,15 +1475,9 @@ function deleteBroker(name){
     : `Eliminar broker "${name}"?`;
   if(!confirm(msg)) return;
   brokers=brokers.filter(b=>b!==name);
-  save();renderBrokerGrid();
-// Pre-fetch dolar rates on startup
-(async()=>{
-  try{const r=await fetch('https://dolarapi.com/v1/dolares/blue');const d=await r.json();if(d.venta>100){mkt.dblue={price:d.venta,buy:d.compra};document.getElementById('sBlue').textContent='$'+Math.round(d.venta);}}catch(e){}
-  try{const r=await fetch('https://dolarapi.com/v1/dolares/bolsa');const d=await r.json();if(d.venta>100){mkt.dmep={price:d.venta,buy:d.compra};document.getElementById('sMep').textContent='$'+Math.round(d.venta);}}catch(e){}
-  try{const r=await fetch('https://dolarapi.com/v1/dolares/contadoconliqui');const d=await r.json();if(d.venta>100){mkt.dccl={price:d.venta,buy:d.compra};document.getElementById('sCcl').textContent='$'+Math.round(d.venta);}}catch(e){}
-})();
+  save();
+  renderBrokerGrid();
 }
-
 function renderMainCharts(pf, totGlobal, totARS, totUSD, c){
   // Line chart
   const s90=snapshots.slice(-90);
@@ -1563,16 +1491,13 @@ function renderMainCharts(pf, totGlobal, totARS, totUSD, c){
       options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6b8cba',maxTicksLimit:6},grid:{color:'#eef2f9'}},y:{ticks:{color:'#6b8cba',callback:v=>`$${(v/1000).toFixed(0)}k`},grid:{color:'#eef2f9'}}}}
     });
   }else{nc.style.display='block';lc.style.display='none';}
-
   // Pie por activo
-  // pd already defined above
   const pd=pf.filter(a=>a.value>0).map(a=>({name:a.ticker,value:a.value}));
   if(_pieChart) _pieChart.destroy();
   if(pd.length){
     _pieChart=new Chart(el('pieChart'),{type:'doughnut',data:{labels:pd.map(d=>d.name),datasets:[{data:pd.map(d=>d.value),backgroundColor:COLS,borderWidth:2,borderColor:'#f5f7fa'}]},options:{responsive:false,plugins:{legend:{display:false}}}});
     el('pieLegend').innerHTML=pd.slice(0,8).map((d,i)=>`<div class="pie-row"><div><span class="pie-dot" style="background:${COLS[i%COLS.length]}"></span><strong>${d.name}</strong></div><span style="color:var(--muted)">${n2(totGlobal>0?d.value/totGlobal*100:0)}%</span></div>`).join('');
   }
-
   // ARS vs USD
   if(_arsUsdChart) _arsUsdChart.destroy();
   _arsUsdChart=new Chart(el('arsUsdChart'),{type:'doughnut',data:{labels:['ARS','USD'],datasets:[{data:[totARS,totUSD],backgroundColor:['#f59f00','#1565c0'],borderWidth:2,borderColor:'#f5f7fa'}]},options:{responsive:false,plugins:{legend:{display:false}}}});
@@ -1581,7 +1506,6 @@ function renderMainCharts(pf, totGlobal, totARS, totUSD, c){
     <div class="pie-row"><div><span class="pie-dot" style="background:#1565c0"></span><strong>USD</strong></div><span style="color:var(--muted)">${n2(tot2>0?totUSD/tot2*100:0)}%</span></div>
     <div style="margin-top:8px;font-size:11px"><strong>Total:</strong> ${$u(totGlobal)}</div>`;
 }
-
 function renderSidebarPie(pf, title, totVal){
   const canvas = el('sidebarPieCanvas');
   if(!canvas) return;
@@ -1601,7 +1525,6 @@ function renderSidebarPie(pf, title, totVal){
       <span style="color:var(--muted)">${n2(tot>0?d.value/tot*100:0)}%</span>
     </div>`).join('')+(pd.length>6?`<div style="color:var(--muted);font-size:10px">+${pd.length-6} más</div>`:'');
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // SIDEBAR MARKET DATA
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1623,7 +1546,6 @@ async function fetchYahooQuote(sym){
   }
   return null;
 }
-
 async function loadSidebar(){
   // Real indices via Yahoo Finance
   if(!mkt.sp500){const d=await fetchYahooQuote('^GSPC');if(d)mkt.sp500=d;}
@@ -1637,7 +1559,6 @@ async function loadSidebar(){
   if(!mkt.dblue){
     try{const r=await fetch('https://dolarapi.com/v1/dolares/blue');const d=await r.json();if(d.venta>100)mkt.dblue={price:d.venta,buy:d.compra};}catch(e){}
   }
-
   const rows=[
     {label:'S&P 500',d:mkt.sp500,dp:0},
     {label:'Nasdaq 100',d:mkt.ndx,dp:0},
@@ -1656,7 +1577,6 @@ async function loadSidebar(){
       <div class="quote-right"><span class="quote-price">${priceStr}</span>
       ${chgPct!=null?`<span class="chg ${cls}">${chgPct>=0?'+':''}${n2(chgPct,2)}%</span>`:''}</div></div>`;
   }).join('');
-
   // News
   const feeds=[
     {name:'Ámbito',url:'https://www.ambito.com/rss/pages/finanzas.xml'},
@@ -1678,7 +1598,6 @@ async function loadSidebar(){
   }
   el('newsPanel').innerHTML='<div class="side-msg">Sin noticias disponibles</div>';
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // ORDER MODAL
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1690,15 +1609,14 @@ function onActionChange(){
     const pf=getPortfolio();
     const sel=el('oSellTicker');
     sel.innerHTML='<option value="">— Seleccionar —</option>';
-    pf.forEach(a=>sel.innerHTML+=`<option value="${a.ticker}">${a.ticker} (${n2(a.qty,4)} disp.)</option>`);
+    pf.forEach(a=>sel.innerHTML+=`<option value="${a.ticker}">${a.ticker} (${fmtQty(a.qty,a.type)} disp.)</option>`);
   }
 }
-
 function onSellChange(){
   const ticker=el('oSellTicker').value;
   const pf=getPortfolio();
   const a=pf.find(x=>x.ticker===ticker);
-  el('sellHint').textContent=a?`Máx: ${n2(a.qty,4)} · PPC: ${$u(a.avgPrice)}`:'';
+  el('sellHint').textContent=a?`Máx: ${fmtQty(a.qty,a.type)} · PPC: ${$u(a.avgPrice)}`:'';
   if(a&&prices[a.ticker]>0){
     const c=ccl();
     const isPxARS=prices[a.ticker+'_ars']===true;
@@ -1706,9 +1624,7 @@ function onSellChange(){
     calcTotal();
   }
 }
-
 function onMarketChange(){el('oTicker').value='';hideAC();updatePriceCurrency();}
-
 function updatePriceCurrency(){
   const mktVal=el('oMarket').value;
   const isA=(mktVal==='cedear'||mktVal==='arg'||mktVal==='bono');
@@ -1719,7 +1635,6 @@ function updatePriceCurrency(){
   el('oPriceHint').textContent=isA?`CCL: $${n2(ccl(),0)} → app convierte a USD automáticamente`:'';
   calcTotal();
 }
-
 function calcTotal(){
   const qty=parseFloat(el('oQty').value)||0;
   const price=parseFloat(el('oPrice').value)||0;
@@ -1732,7 +1647,6 @@ function calcTotal(){
   el('oTotalSub').textContent=total>0?(isA?`≈ USD ${n2(total/c,2)}`:`≈ ARS ${n2(total*c,0)}`):'';
   el('oTotal').style.color=total>0?'var(--blue)':'var(--muted)';
 }
-
 function onTickerInput(val){
   const mktVal=el('oMarket').value;
   const list=TICKERS[mktVal]||TICKERS.usa;
@@ -1746,21 +1660,18 @@ function onTickerInput(val){
 }
 function pickTicker(t){el('oTicker').value=t;hideAC();}
 function hideAC(){el('acList').style.display='none';}
-
 function saveOrder(){
   const isVenta=el('oAction').value==='Venta';
   const ticker=isVenta?el('oSellTicker').value:el('oTicker').value.trim().toUpperCase();
   const qty=parseFloat(el('oQty').value);
   const price=parseFloat(el('oPrice').value);
   if(!ticker||!qty||!price){alert('Faltan datos obligatorios');return;}
-
   if(isVenta){
     const pf=getPortfolio();
     const held=pf.find(a=>a.ticker===ticker);
     if(!held){alert(`No tenés ${ticker} en cartera`);return;}
-    if(qty>held.qty+0.0001){alert(`Solo tenés ${n2(held.qty,4)} de ${ticker}`);return;}
+    if(qty>held.qty+0.0001){alert(`Solo tenés ${fmtQty(held.qty,held.type)} de ${ticker}`);return;}
   }
-
   const mktVal=el('oMarket').value;
   const typeMap={usa:'Acción USA',cedear:'CEDEAR',arg:'Acción Argentina',cripto:'Cripto',bono:'Bono/Renta Fija',liquidez:'Acción USA'};
   const type=isVenta?(getPortfolio().find(a=>a.ticker===ticker)?.type||'Acción USA'):(typeMap[mktVal]||'Acción USA');
@@ -1768,11 +1679,9 @@ function saveOrder(){
   const c=ccl();
   const priceUSD=isA?price/c:price;
   const commUSD=(parseFloat(el('oComm').value)||0)/(isA?c:1);
-
   const broker = el('oBroker').value;
   const orderDate = el('oDate').value||new Date().toISOString().slice(0,10);
   const isCompra = el('oAction').value === 'Compra';
-
   orders.push({
     id:Date.now(),ticker,type,
     action:isCompra?'Compra':'Venta',
@@ -1782,9 +1691,6 @@ function saveOrder(){
     date:orderDate,
     notes:el('oNotes').value,
   });
-
-
-
   // Auto-adjust USD/USDT liquidity for non-ARS brokers
   if(!isA && broker && !isARSBroker(broker)){
     const totalUSD = qty * priceUSD + commUSD;
@@ -1811,7 +1717,6 @@ function saveOrder(){
   }
   save();closeOverlay('order');resetOrder();render();doRefresh();
 }
-
 function resetOrder(){
   ['oQty','oPrice','oComm','oNotes','oTicker'].forEach(id=>el(id).value='');
   el('oAction').value='Compra';el('oBroker').value='';
@@ -1819,7 +1724,6 @@ function resetOrder(){
   el('oMarket').value='usa';
   onActionChange();updatePriceCurrency();
 }
-
 function quickOrder(ticker,type,action){
   el('oAction').value=action;onActionChange();
   if(action==='Venta'){
@@ -1836,7 +1740,6 @@ function quickOrder(ticker,type,action){
   calcTotal();openOverlay('order');
   closeMenu();
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // ACTIONS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1845,7 +1748,6 @@ function editLastOrder(ticker){
   const tickerOrders = orders.filter(o=>o.ticker===ticker).sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!tickerOrders.length){ alert('No hay órdenes para '+ticker); return; }
   const o = tickerOrders[0];
-
   el('editOrderId').value = String(o.id);
   el('editOrderTitle').textContent = `Editar orden: ${o.action} ${o.ticker}`;
   el('editQty').value = o.qty;
@@ -1854,40 +1756,32 @@ function editLastOrder(ticker){
   el('editComm').value = o.comm||0;
   el('editDate').value = o.date;
   el('editNotes').value = o.notes||'';
-
   // Populate broker select
   const sel = el('editBroker');
   sel.innerHTML = '<option value="">— Seleccionar —</option>';
   brokers.forEach(b => sel.innerHTML += `<option value="${b}" ${o.broker===b?'selected':''}>${b}</option>`);
-
   closeMenu();
   openOverlay('edit');
 }
-
 function saveEditOrder(){
   const id = el('editOrderId').value;
   const idx = orders.findIndex(o=>String(o.id)===id);
   if(idx===-1){ alert('Orden no encontrada'); return; }
-
   const o = orders[idx];
   const qty = parseFloat(el('editQty').value);
   const price = parseFloat(el('editPrice').value);
   if(!qty||!price){ alert('Faltan datos'); return; }
-
   // Recalculate USD price if ARS order
   const priceUSD = o.currency==='ARS' ? price/(o.cclAtOrder||ccl()) : price;
   const commRaw = parseFloat(el('editComm').value)||0;
   const commUSD = o.currency==='ARS' ? commRaw/(o.cclAtOrder||ccl()) : commRaw;
-
   orders[idx] = {...o, qty, price:priceUSD, priceOrig:price, comm:commUSD,
     broker:el('editBroker').value,
     date:el('editDate').value||o.date,
     notes:el('editNotes').value
   };
-
   save(); closeOverlay('edit'); render();
 }
-
 function delOrder(id){orders=orders.filter(o=>String(o.id)!==String(id));save();render();}
 function delTicker(ticker){orders=orders.filter(o=>o.ticker!==ticker);save();render();}
 function goTV(ticker,type){
@@ -1895,7 +1789,6 @@ function goTV(ticker,type){
   window.open(`https://www.tradingview.com/chart/?symbol=${encodeURIComponent(sym)}`,'_blank');
   closeMenu();
 }
-
 function toggleMenu(id,e){
   e.stopPropagation();
   closeMenu();
@@ -1904,21 +1797,17 @@ function toggleMenu(id,e){
 }
 function closeMenu(){document.querySelectorAll('.asset-menu').forEach(m=>m.style.display='none');}
 document.addEventListener('click',closeMenu);
-
 function toggleCur(){currency=currency==='USD'?'ARS':'USD';el('btnCur').textContent=currency;render();}
-
 function toggleDark(){
   const isDark=document.body.classList.toggle('dark');
   localStorage.setItem('pf6_dark', isDark?'1':'0');
   el('btnDark').textContent=isDark?'☀️':'🌙';
 }
-
 function setStatus(msg,loading){
   const e=el('statusBar');
   e.textContent=msg;
   e.style.color=loading?'var(--blue2)':'var(--muted)';
 }
-
 function editName(){
   const cur=localStorage.getItem('pf6_name')||'Mi Portfolio';
   const name=prompt('Nombre del portfolio:',cur);
@@ -1928,7 +1817,6 @@ function editName(){
     if(currentUser) supaSync();
   }
 }
-
 function configFMP(){
   const cur=localStorage.getItem('pf6_fmp')||'';
   const key=prompt('API Key de Financial Modeling Prep (financialmodelingprep.com)\nPlan gratuito: 250 requests/día\n\nKey actual: '+(cur?cur.slice(0,8)+'...':'ninguna'),cur);
@@ -1939,7 +1827,6 @@ function configFMP(){
   btn.className=key.trim()?'btn btn-green':'btn btn-gold';
   if(key.trim()) alert('✓ FMP configurado. Tocá Actualizar.');
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // IMPORT / EXPORT
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1951,7 +1838,6 @@ function exportData(){
   a.download=`crifund_backup_${new Date().toISOString().slice(0,10)}.json`;
   a.click();URL.revokeObjectURL(url);
 }
-
 function importData(event){
   const file=event.target.files[0];if(!file)return;
   const reader=new FileReader();
@@ -1973,7 +1859,6 @@ function importData(event){
   };
   reader.readAsText(file);
 }
-
 // ═══════════════════════════════════════════════════════════════════════════
 // UI HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1987,12 +1872,10 @@ function goTab(name,btn){
 }
 function openOverlay(name){el('overlay-'+name).classList.add('open');}
 function closeOverlay(name){el('overlay-'+name).classList.remove('open');}
-
 // ═══════════════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════════════
 el('oDate').value=new Date().toISOString().slice(0,10);
-
 // Restore name
 // Restore dark mode
 if(localStorage.getItem('pf6_dark')==='1'){
@@ -2001,13 +1884,11 @@ if(localStorage.getItem('pf6_dark')==='1'){
 }
 const savedName=localStorage.getItem('pf6_name');
 if(savedName) el('pfName').textContent=savedName;
-
 // Restore FMP button state
 if(localStorage.getItem('pf6_fmp')){
   el('btnFMP').textContent='⚙ FMP ✓';
   el('btnFMP').className='btn btn-green';
 }
-
 // Supabase auth
 supa.auth.getSession().then(({data:{session}})=>{
   if(session?.user) onLogin(session.user);
@@ -2017,7 +1898,6 @@ setTimeout(loadSidebar,500);
 supa.auth.onAuthStateChange((event,session)=>{
   if(event==='SIGNED_IN'&&session?.user&&!currentUser) onLogin(session.user);
 });
-
 renderBrokerGrid();
 // Pre-fetch dolar rates on startup
 (async()=>{
