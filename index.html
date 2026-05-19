@@ -156,6 +156,17 @@ body.dark .tbl th.th-sort:hover{color:#90caf9}
 .ainfo .brks{margin-top:2px}
 .brk-tag{font-size:9px;background:var(--blueL);color:var(--blue);
   padding:1px 5px;border-radius:3px;margin-right:2px;font-weight:600}
+/* ORDER FILTERS */
+.order-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:8px;box-shadow:0 1px 3px #1565c008}
+.order-filters input,.order-filters select{background:var(--bg);border:1px solid var(--border);
+  border-radius:6px;padding:7px 10px;font-size:12px;font-family:inherit;color:var(--txt);
+  outline:none;min-width:0;flex:1;min-width:120px}
+.order-filters input[type="date"]{flex:0 1 140px;min-width:130px}
+.order-filters #filterTicker{flex:2;min-width:140px}
+.order-filters .btn{padding:7px 12px;font-size:12px}
+body.dark .order-filters input,body.dark .order-filters select{background:#111827;border-color:#1e2d45;color:#e8f0fe}
 /* ORDERS */
 .ord-card{background:var(--card);border-radius:10px;padding:10px 12px;
   margin-bottom:7px;border:1px solid var(--border)}
@@ -374,6 +385,21 @@ body.dark #auth-welcome h2{color:#90caf9}
         <span class="sec-title">HISTORIAL</span>
         <button class="btn btn-green" onclick="openOverlay('order')">+ Nueva orden</button>
       </div>
+      <div class="order-filters" id="orderFilters">
+        <input id="filterTicker" type="text" placeholder="🔍 Buscar ticker..." oninput="applyOrderFilters()">
+        <select id="filterBroker" onchange="applyOrderFilters()">
+          <option value="">Todos los brokers</option>
+        </select>
+        <select id="filterAction" onchange="applyOrderFilters()">
+          <option value="">Compras y ventas</option>
+          <option value="Compra">Solo compras</option>
+          <option value="Venta">Solo ventas</option>
+        </select>
+        <input id="filterDateFrom" type="date" onchange="applyOrderFilters()" title="Desde">
+        <input id="filterDateTo" type="date" onchange="applyOrderFilters()" title="Hasta">
+        <button class="btn btn-ghost" onclick="clearOrderFilters()" id="filterClearBtn" style="display:none">✕ Limpiar</button>
+      </div>
+      <div id="orderCount" style="font-size:11px;color:var(--muted);margin-bottom:8px;display:none"></div>
       <div id="orderList"></div>
     </div>
     <!-- BROKERS -->
@@ -1390,12 +1416,70 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
   tbl.appendChild(tbody);wrap.appendChild(tbl);
   el2.innerHTML='';el2.appendChild(wrap);
 }
+// Estado de filtros de la pestaña Órdenes.
+let orderFilters = { ticker:'', broker:'', action:'', dateFrom:'', dateTo:'' };
+function applyOrderFilters(){
+  orderFilters = {
+    ticker:   (el('filterTicker').value||'').trim().toUpperCase(),
+    broker:   el('filterBroker').value||'',
+    action:   el('filterAction').value||'',
+    dateFrom: el('filterDateFrom').value||'',
+    dateTo:   el('filterDateTo').value||'',
+  };
+  renderOrders();
+}
+function clearOrderFilters(){
+  el('filterTicker').value='';
+  el('filterBroker').value='';
+  el('filterAction').value='';
+  el('filterDateFrom').value='';
+  el('filterDateTo').value='';
+  orderFilters = { ticker:'', broker:'', action:'', dateFrom:'', dateTo:'' };
+  renderOrders();
+}
+function hasActiveFilters(){
+  return !!(orderFilters.ticker || orderFilters.broker || orderFilters.action || orderFilters.dateFrom || orderFilters.dateTo);
+}
+function passesFilters(o){
+  if(orderFilters.ticker && !(o.ticker||'').toUpperCase().includes(orderFilters.ticker)) return false;
+  if(orderFilters.broker && o.broker !== orderFilters.broker) return false;
+  if(orderFilters.action && o.action !== orderFilters.action) return false;
+  if(orderFilters.dateFrom && o.date < orderFilters.dateFrom) return false;
+  if(orderFilters.dateTo && o.date > orderFilters.dateTo) return false;
+  return true;
+}
+function refreshFilterBrokerDropdown(){
+  // Mantiene el select de broker sincronizado con la lista actual.
+  const sel = el('filterBroker');
+  if(!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Todos los brokers</option>';
+  brokers.forEach(b => sel.innerHTML += `<option value="${b}" ${b===current?'selected':''}>${b}</option>`);
+}
 function renderOrders(){
+  refreshFilterBrokerDropdown();
   const el2=el('orderList');
-  const sorted=[...orders].sort((a,b)=>new Date(b.date)-new Date(a.date));
-  if(!sorted.length){el2.innerHTML='<div class="empty"><div class="empty-icon">📋</div><div>Sin órdenes.</div></div>';return;}
+  const all = [...orders].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const filtered = all.filter(passesFilters);
+  // Mostrar contador de filtros activos
+  const countEl = el('orderCount');
+  const clearBtn = el('filterClearBtn');
+  if(hasActiveFilters()){
+    countEl.style.display='block';
+    countEl.textContent = `${filtered.length} de ${all.length} órdenes`;
+    if(clearBtn) clearBtn.style.display='inline-block';
+  } else {
+    countEl.style.display='none';
+    if(clearBtn) clearBtn.style.display='none';
+  }
+  if(!filtered.length){
+    el2.innerHTML = all.length
+      ? '<div class="empty"><div class="empty-icon">🔍</div><div>Ninguna orden coincide con los filtros.</div></div>'
+      : '<div class="empty"><div class="empty-icon">📋</div><div>Sin órdenes.</div></div>';
+    return;
+  }
   el2.innerHTML='';
-  sorted.forEach(o=>{
+  filtered.forEach(o=>{
     const div=document.createElement('div');
     div.className=`ord-card ${o.action==='Compra'?'buy':'sell'}`;
     const total=o.qty*o.price+(o.comm||0);
@@ -1950,159 +2034,4 @@ function configFMP(){
   btn.className=key.trim()?'btn btn-green':'btn btn-gold';
   if(key.trim()) alert('✓ FMP configurado. Tocá Actualizar.');
 }
-// ═══════════════════════════════════════════════════════════════════════════
-// IMPORT / EXPORT
-// ═══════════════════════════════════════════════════════════════════════════
-function exportData(){
-  const data={version:1,exportedAt:new Date().toISOString(),brokers,orders,snapshots};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;
-  a.download=`crifund_backup_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();URL.revokeObjectURL(url);
-}
-function importData(event){
-  const file=event.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    try{
-      const data=JSON.parse(e.target.result);
-      if(Array.isArray(data)){
-        if(confirm(`Importar ${data.length} órdenes? Reemplaza los datos actuales.`)){
-          orders=data;save();render();alert(`✓ ${data.length} órdenes importadas`);
-        }
-      } else if(data.orders){
-        if(confirm(`Importar backup de ${data.exportedAt?.slice(0,10)||'?'}?\n${data.orders.length} órdenes\n\nReemplaza los datos actuales.`)){
-          orders=data.orders||[];snapshots=data.snapshots||[];brokers=data.brokers||DEFAULT_BROKERS;
-          save();render();alert(`✓ ${orders.length} órdenes importadas`);
-        }
-      } else {alert('Formato no reconocido');}
-    }catch(err){alert('Error: '+err.message);}
-    event.target.value='';
-  };
-  reader.readAsText(file);
-}
-// ═══════════════════════════════════════════════════════════════════════════
-// UI HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
-function el(id){return document.getElementById(id);}
-function goTab(name,btn){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  el('page-'+name).classList.add('active');btn.classList.add('active');
-  if(name==='brokers') hideBrokerDetail();
-  if(name==='charts') renderMainCharts(enrich(getPortfolio()),0,0,0,ccl());
-}
-function openOverlay(name){el('overlay-'+name).classList.add('open');}
-function closeOverlay(name){el('overlay-'+name).classList.remove('open');}
-// ═══════════════════════════════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════════════════════════════
-el('oDate').value=new Date().toISOString().slice(0,10);
-if(localStorage.getItem('pf6_dark')==='1'){
-  document.body.classList.add('dark');
-  document.getElementById('btnDark').textContent='☀️';
-}
-const savedName=localStorage.getItem('pf6_name');
-if(savedName) el('pfName').textContent=savedName;
-if(localStorage.getItem('pf6_fmp')){
-  el('btnFMP').textContent='⚙ FMP ✓';
-  el('btnFMP').className='btn btn-green';
-}
-// Supabase auth — cuenta obligatoria
-applyAuthGate(false);
-supa.auth.getSession().then(({data:{session}})=>{
-  if(session?.user){
-    onLogin(session.user);
-  } else {
-    clearAllLocalData();
-    openOverlay('login');
-  }
-});
-supa.auth.onAuthStateChange((event,session)=>{
-  if(event==='SIGNED_IN'&&session?.user&&!currentUser) onLogin(session.user);
-});
-renderBrokerGrid();
-</script>
-</body>
-</html>
-}
-// ═══════════════════════════════════════════════════════════════════════════
-// IMPORT / EXPORT
-// ═══════════════════════════════════════════════════════════════════════════
-function exportData(){
-  const data={version:1,exportedAt:new Date().toISOString(),brokers,orders,snapshots};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;
-  a.download=`crifund_backup_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();URL.revokeObjectURL(url);
-}
-function importData(event){
-  const file=event.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    try{
-      const data=JSON.parse(e.target.result);
-      if(Array.isArray(data)){
-        if(confirm(`Importar ${data.length} órdenes? Reemplaza los datos actuales.`)){
-          orders=data;save();render();alert(`✓ ${data.length} órdenes importadas`);
-        }
-      } else if(data.orders){
-        if(confirm(`Importar backup de ${data.exportedAt?.slice(0,10)||'?'}?\n${data.orders.length} órdenes\n\nReemplaza los datos actuales.`)){
-          orders=data.orders||[];snapshots=data.snapshots||[];brokers=data.brokers||DEFAULT_BROKERS;
-          save();render();alert(`✓ ${orders.length} órdenes importadas`);
-        }
-      } else {alert('Formato no reconocido');}
-    }catch(err){alert('Error: '+err.message);}
-    event.target.value='';
-  };
-  reader.readAsText(file);
-}
-// ═══════════════════════════════════════════════════════════════════════════
-// UI HELPERS
-// ═══════════════════════════════════════════════════════════════════════════
-function el(id){return document.getElementById(id);}
-function goTab(name,btn){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  el('page-'+name).classList.add('active');btn.classList.add('active');
-  if(name==='brokers') hideBrokerDetail();
-  if(name==='charts') renderMainCharts(enrich(getPortfolio()),0,0,0,ccl());
-}
-function openOverlay(name){el('overlay-'+name).classList.add('open');}
-function closeOverlay(name){el('overlay-'+name).classList.remove('open');}
-// ═══════════════════════════════════════════════════════════════════════════
-// INIT
-// ═══════════════════════════════════════════════════════════════════════════
-el('oDate').value=new Date().toISOString().slice(0,10);
-if(localStorage.getItem('pf6_dark')==='1'){
-  document.body.classList.add('dark');
-  document.getElementById('btnDark').textContent='☀️';
-}
-const savedName=localStorage.getItem('pf6_name');
-if(savedName) el('pfName').textContent=savedName;
-if(localStorage.getItem('pf6_fmp')){
-  el('btnFMP').textContent='⚙ FMP ✓';
-  el('btnFMP').className='btn btn-green';
-}
-applyAuthGate(false);
-supa.auth.getSession().then(({data:{session}})=>{
-  if(session?.user){
-    onLogin(session.user);
-  } else {
-    clearAllLocalData();
-    openOverlay('login');
-  }
-});
-supa.auth.onAuthStateChange((event,session)=>{
-  if(event==='SIGNED_IN'&&session?.user&&!currentUser) onLogin(session.user);
-});
-renderBrokerGrid();
-</script>
-</body>
-</html>
-rBrokerGrid();
-</script>
-</body>
-</html>
+// ═══════════════════════�
