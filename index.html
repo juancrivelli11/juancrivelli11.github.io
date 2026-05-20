@@ -1054,6 +1054,19 @@ function sortPf(pf){
 // ═══════════════════════════════════════════════════════════════════════════
 // PRICE FETCH
 // ═══════════════════════════════════════════════════════════════════════════
+// Extrae el "cierre de AYER" del response de Yahoo Finance.
+// chartPreviousClose es el cierre ANTES del rango (no del día anterior),
+// así que para range=5d puede dar un valor de 6 días atrás. Por eso usamos
+// el array de cierres diarios y tomamos el anteúltimo (último = hoy, anteúltimo = ayer).
+function yahooPrevClose(result){
+  const closes = result?.indicators?.quote?.[0]?.close || [];
+  // Buscar de atrás hacia adelante saltando el último (que es hoy) y los null.
+  for(let i = closes.length - 2; i >= 0; i--){
+    if(typeof closes[i] === 'number' && closes[i] > 0) return closes[i];
+  }
+  // Fallback: usar chartPreviousClose si no se pudo extraer del array.
+  return result?.meta?.chartPreviousClose || 0;
+}
 async function fetchArgPrice(ticker){
   const sym=ticker+'.BA';
   const proxies=[
@@ -1066,13 +1079,17 @@ async function fetchArgPrice(ticker){
         const url=`${base}.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`;
         const r=await fetch(proxy(url),{signal:AbortSignal.timeout(5000)});
         const d=await r.json();
-        const meta=d?.chart?.result?.[0]?.meta;
-        if(meta?.regularMarketPrice>0) return{
-          price:meta.regularMarketPrice,
-          prev:meta.chartPreviousClose||meta.regularMarketPrice,
-          chgPct:meta.chartPreviousClose?(meta.regularMarketPrice-meta.chartPreviousClose)/meta.chartPreviousClose*100:0,
-          currency:'ARS'
-        };
+        const result=d?.chart?.result?.[0];
+        const meta=result?.meta;
+        if(meta?.regularMarketPrice>0){
+          const prev = yahooPrevClose(result) || meta.regularMarketPrice;
+          return {
+            price: meta.regularMarketPrice,
+            prev: prev,
+            chgPct: prev ? (meta.regularMarketPrice - prev) / prev * 100 : 0,
+            currency: 'ARS'
+          };
+        }
       }catch(e){}
     }
   }
@@ -1088,9 +1105,16 @@ async function fetchUSPrice(sym){
         const url=`${base}.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`;
         const r=await fetch(proxy(url),{signal:AbortSignal.timeout(5000)});
         const d=await r.json();
-        const meta=d?.chart?.result?.[0]?.meta;
+        const result=d?.chart?.result?.[0];
+        const meta=result?.meta;
         if(meta?.regularMarketPrice>0){
-          return{price:meta.regularMarketPrice,prev:meta.chartPreviousClose||meta.regularMarketPrice,chgPct:meta.chartPreviousClose?(meta.regularMarketPrice-meta.chartPreviousClose)/meta.chartPreviousClose*100:0,currency:'USD'};
+          const prev = yahooPrevClose(result) || meta.regularMarketPrice;
+          return {
+            price: meta.regularMarketPrice,
+            prev: prev,
+            chgPct: prev ? (meta.regularMarketPrice - prev) / prev * 100 : 0,
+            currency: 'USD'
+          };
         }
       }catch(e){}
     }
@@ -1742,13 +1766,17 @@ async function fetchYahooQuote(sym){
       try{
         const url=`${base}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`;
         const r=await fetch(proxy(url),{signal:AbortSignal.timeout(5000)});
-      const d=await r.json();
-        const meta=d?.chart?.result?.[0]?.meta;
-        if(meta?.regularMarketPrice>0) return{
-          price:meta.regularMarketPrice,
-          prev:meta.chartPreviousClose||meta.regularMarketPrice,
-          chgPct:meta.chartPreviousClose?(meta.regularMarketPrice-meta.chartPreviousClose)/meta.chartPreviousClose*100:0
-        };
+        const d=await r.json();
+        const result=d?.chart?.result?.[0];
+        const meta=result?.meta;
+        if(meta?.regularMarketPrice>0){
+          const prev = yahooPrevClose(result) || meta.regularMarketPrice;
+          return {
+            price: meta.regularMarketPrice,
+            prev: prev,
+            chgPct: prev ? (meta.regularMarketPrice - prev) / prev * 100 : 0
+          };
+        }
       }catch(e){}
     }
   }
