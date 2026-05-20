@@ -1079,25 +1079,32 @@ async function fetchArgPrice(ticker){
   return null;
 }
 async function fetchUSPrice(sym){
-  const fmp=localStorage.getItem('pf6_fmp')||'';
-  if(fmp){
-    try{
-      const r=await fetch(`https://financialmodelingprep.com/api/v3/quote/${sym}?apikey=${fmp}`);
-      const d=await r.json();
-      if(d?.[0]?.price>0){console.log(`FMP: ${sym}=${d[0].price}`);return{price:d[0].price,prev:d[0].previousClose||d[0].price,chgPct:d[0].changesPercentage||0,currency:'USD'};}
-    }catch(e){}
-  }
+  // PRIMARIO: Yahoo Finance — más confiable para previousClose.
+  // FMP free tier devuelve previousClose desactualizado para algunos tickers,
+  // causando Var% diarios con signo opuesto al real (confirmado con datos del usuario).
   for(const proxy of [u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`]){
     for(const base of ['https://query1','https://query2']){
       try{
         const url=`${base}.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`;
         const r=await fetch(proxy(url),{signal:AbortSignal.timeout(5000)});
-      const d=await r.json();
+        const d=await r.json();
         const meta=d?.chart?.result?.[0]?.meta;
-        if(meta?.regularMarketPrice>0){console.log(`Yahoo: ${sym}=${meta.regularMarketPrice}`);return{price:meta.regularMarketPrice,prev:meta.chartPreviousClose||meta.regularMarketPrice,chgPct:meta.chartPreviousClose?(meta.regularMarketPrice-meta.chartPreviousClose)/meta.chartPreviousClose*100:0,currency:'USD'};}
+        if(meta?.regularMarketPrice>0){
+          return{price:meta.regularMarketPrice,prev:meta.chartPreviousClose||meta.regularMarketPrice,chgPct:meta.chartPreviousClose?(meta.regularMarketPrice-meta.chartPreviousClose)/meta.chartPreviousClose*100:0,currency:'USD'};
+        }
       }catch(e){}
     }
   }
+  // FALLBACK 1: FMP (si el usuario configuró key y Yahoo falló por completo)
+  const fmp=localStorage.getItem('pf6_fmp')||'';
+  if(fmp){
+    try{
+      const r=await fetch(`https://financialmodelingprep.com/api/v3/quote/${sym}?apikey=${fmp}`);
+      const d=await r.json();
+      if(d?.[0]?.price>0){return{price:d[0].price,prev:d[0].previousClose||d[0].price,chgPct:d[0].changesPercentage||0,currency:'USD'};}
+    }catch(e){}
+  }
+  // FALLBACK 2: AlphaVantage
   try{
     const r=await fetch(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${sym}&apikey=${AV}`);
     const d=await r.json();
@@ -1152,43 +1159,31 @@ async function doRefresh(force=false){
   usAssets.filter(a=>STABLE.includes(a.ticker.toUpperCase())).forEach(a=>{
     prices[a.ticker]=1;prices[a.ticker+'_prev']=1;
   });
-  // Batch FMP request - single call for all tickers
-  const fmp=localStorage.getItem('pf6_fmp')||'';
-  if(fmp && toFetch.length){
-    try{
-      const syms=toFetch.map(a=>a.ticker).join(',');
-      console.log(`FMP batch request: ${syms}`);
-      const r=await fetch(`https://financialmodelingprep.com/api/v3/quote/${syms}?apikey=${fmp}`);
-      console.log(`FMP response status: ${r.status}`);
-      const d=await r.json();
-      console.log(`FMP response:`, d?.length, 'quotes');
-      if(Array.isArray(d)){
-        d.forEach(q=>{
-          if(q.price>0){
-            prices[q.symbol]=q.price;
-            prices[q.symbol+'_prev']=q.previousClose||q.price;
-            console.log(`FMP batch: ${q.symbol}=${q.price}`);
+  // Fetch en paralelo con concurrencia limitada para no saturar el proxy de Yahoo.
+  // fetchUSPrice ya prioriza Yahoo (más confiable para previousClose) sobre FMP.
+  if(toFetch.length){
+    const CONCURRENCY = 8;
+    let cursor = 0;
+    let done = 0;
+    setStatus(`Obteniendo precios USA (0/${toFetch.length})...`, true);
+    await Promise.all(Array(CONCURRENCY).fill(0).map(async () => {
+      while(true){
+        const i = cursor++;
+        if(i >= toFetch.length) break;
+        const a = toFetch[i];
+        try{
+          const data = await fetchUSPrice(a.ticker);
+          if(data?.price > 0){
+            prices[a.ticker] = data.price;
+            prices[a.ticker+'_prev'] = data.prev;
           }
-        });
-        // Only fetch missing ones via Yahoo
-        const missing=toFetch.filter(a=>!prices[a.ticker]);
-        for(const a of missing){
-          const data=await fetchUSPrice(a.ticker);
-          if(data?.price>0){prices[a.ticker]=data.price;prices[a.ticker+'_prev']=data.prev;}
+        }catch(e){}
+        done++;
+        if(done % 5 === 0 || done === toFetch.length){
+          setStatus(`Obteniendo precios USA (${done}/${toFetch.length})...`, true);
         }
       }
-    }catch(e){
-      // Fallback to individual
-      for(const a of toFetch){
-        const data=await fetchUSPrice(a.ticker);
-        if(data?.price>0){prices[a.ticker]=data.price;prices[a.ticker+'_prev']=data.prev;}
-      }
-    }
-  } else {
-    for(const a of toFetch){
-      const data=await fetchUSPrice(a.ticker);
-      if(data?.price>0){prices[a.ticker]=data.price;prices[a.ticker+'_prev']=data.prev;}
-    }
+    }));
   }
   // Dolar
   try{const r=await fetch('https://dolarapi.com/v1/dolares/blue');const d=await r.json();if(d.venta>100)mkt.dblue={price:d.venta,buy:d.compra};}catch(e){}
