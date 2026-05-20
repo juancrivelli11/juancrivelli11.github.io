@@ -1129,6 +1129,12 @@ async function doRefresh(force=false){
   setStatus('Obteniendo precios...',true);
   document.getElementById('btnRef').textContent='...';
   document.getElementById('btnRef').disabled=true;
+  // Si el usuario forzó refresh, limpiar todos los precios cacheados.
+  // Así no quedan valores viejos pegados si alguna fuente falla a media corrida.
+  if(force){
+    prices = {};
+    localStorage.removeItem('pf6_prices');
+  }
   // Crypto
   const cryptos=pf.filter(a=>a.type==='Cripto');
   if(cryptos.length){
