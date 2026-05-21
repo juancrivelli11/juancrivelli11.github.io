@@ -556,6 +556,7 @@ body.dark #auth-welcome h2{color:#90caf9}
     <select id="oAction" onchange="onActionChange()">
       <option value="Compra">Compra</option>
       <option value="Venta">Venta</option>
+      <option value="Gasto">💸 Gasto / Retiro (sacar de liquidez)</option>
     </select>
   </div>
   <div id="sellFields" style="display:none">
@@ -1508,9 +1509,10 @@ function renderOrders(){
     const div=document.createElement('div');
     div.className=`ord-card ${o.action==='Compra'?'buy':'sell'}`;
     const total=o.qty*o.price+(o.comm||0);
+    const lbl = o.expense ? '💸 Gasto' : o.action;
     div.innerHTML=`<div class="ord-row">
       <div class="ord-left">
-        <span class="ord-badge ${o.action==='Compra'?'buy':'sell'}">${o.action}</span>
+        <span class="ord-badge ${o.action==='Compra'?'buy':'sell'}">${lbl}</span>
         <div><strong style="color:var(--blue)">${o.ticker}</strong><div class="ord-meta">${o.date}${o.broker?' · '+o.broker:''}${o.currency==='ARS'?' · ARS':''}</div></div>
       </div>
       <div style="text-align:right;font-size:12px">
@@ -1838,21 +1840,47 @@ async function loadSidebar(){
 // ORDER MODAL
 // ═══════════════════════════════════════════════════════════════════════════
 function onActionChange(){
-  const isVenta=el('oAction').value==='Venta';
-  el('sellFields').style.display=isVenta?'block':'none';
-  el('buyFields').style.display=isVenta?'none':'block';
-  if(isVenta){
+  const act=el('oAction').value;
+  const isVenta=act==='Venta';
+  const isGasto=act==='Gasto';
+  const showSell = isVenta || isGasto;
+  el('sellFields').style.display=showSell?'block':'none';
+  el('buyFields').style.display=showSell?'none':'block';
+  // Label del dropdown según acción
+  const sellLbl = el('sellFields').querySelector('label');
+  if(sellLbl) sellLbl.textContent = isGasto ? 'Liquidez a retirar' : 'Activo a vender';
+  // Label de cantidad
+  const qtyLbl = document.querySelector('label[for="oQty"]') || el('oQty')?.parentElement?.querySelector('label');
+  if(qtyLbl) qtyLbl.textContent = isGasto ? 'Importe a sacar' : 'Cantidad';
+  // Label de precio
+  if(isGasto){
+    el('oPriceLbl').textContent = 'Precio (auto = 1)';
+    el('oPriceHint').textContent = 'Para gastos/retiros usamos precio 1 (la cantidad ya representa el monto).';
+  }
+  if(showSell){
     const pf=getPortfolio();
     const sel=el('oSellTicker');
     sel.innerHTML='<option value="">— Seleccionar —</option>';
-    pf.forEach(a=>sel.innerHTML+=`<option value="${a.ticker}">${a.ticker} (${fmtQty(a.qty,a.type)} disp.)</option>`);
+    const list = isGasto ? pf.filter(a=>isCash(a.ticker)) : pf;
+    if(isGasto && !list.length){
+      sel.innerHTML+='<option value="" disabled>Sin liquidez registrada — agregá una Compra de USD/ARS/USDT primero</option>';
+    } else {
+      list.forEach(a=>sel.innerHTML+=`<option value="${a.ticker}">${a.ticker} (${fmtQty(a.qty,a.type)} disp.)</option>`);
+    }
   }
 }
 function onSellChange(){
   const ticker=el('oSellTicker').value;
+  const isGasto=el('oAction').value==='Gasto';
   const pf=getPortfolio();
   const a=pf.find(x=>x.ticker===ticker);
-  el('sellHint').textContent=a?`Máx: ${fmtQty(a.qty,a.type)} · PPC: ${$u(a.avgPrice)}`:'';
+  el('sellHint').textContent=a?`Máx: ${fmtQty(a.qty,a.type)} disp.`+(isGasto?'':` · PPC: ${$u(a.avgPrice)}`):'';
+  if(isGasto){
+    // Gasto/Retiro: precio=1 (la cantidad es el monto)
+    el('oPrice').value='1';
+    calcTotal();
+    return;
+  }
   if(a&&prices[a.ticker]>0){
     const c=ccl();
     const isPxARS=prices[a.ticker+'_ars']===true;
@@ -1897,38 +1925,47 @@ function onTickerInput(val){
 function pickTicker(t){el('oTicker').value=t;hideAC();}
 function hideAC(){el('acList').style.display='none';}
 function saveOrder(){
-  const isVenta=el('oAction').value==='Venta';
-  const ticker=isVenta?el('oSellTicker').value:el('oTicker').value.trim().toUpperCase();
+  const actVal=el('oAction').value;
+  const isVenta=actVal==='Venta';
+  const isGasto=actVal==='Gasto';
+  const ticker=(isVenta||isGasto)?el('oSellTicker').value:el('oTicker').value.trim().toUpperCase();
   const qty=parseFloat(el('oQty').value);
-  const price=parseFloat(el('oPrice').value);
-  if(!ticker||!qty||!price){alert('Faltan datos obligatorios');return;}
-  if(isVenta){
+  const price=isGasto?1:parseFloat(el('oPrice').value);
+  if(!ticker||!qty||(!isGasto && !price)){alert('Faltan datos obligatorios');return;}
+  if(isVenta||isGasto){
     const pf=getPortfolio();
     const held=pf.find(a=>a.ticker===ticker);
     if(!held){alert(`No tenés ${ticker} en cartera`);return;}
     if(qty>held.qty+0.0001){alert(`Solo tenés ${fmtQty(held.qty,held.type)} de ${ticker}`);return;}
+    if(isGasto && !isCash(ticker)){alert('Para "Gasto/Retiro" elegí un activo de liquidez (USD/ARS/USDT/USDC)');return;}
   }
   const mktVal=el('oMarket').value;
   const typeMap={usa:'Acción USA',cedear:'CEDEAR',arg:'Acción Argentina',cripto:'Cripto',bono:'Bono/Renta Fija',liquidez:'Acción USA'};
-  const type=isVenta?(getPortfolio().find(a=>a.ticker===ticker)?.type||'Acción USA'):(typeMap[mktVal]||'Acción USA');
-  const isA=isARS(type);  // ARS applies to both buy and sell for CEDEARs/arg assets
+  const type=(isVenta||isGasto)?(getPortfolio().find(a=>a.ticker===ticker)?.type||'Acción USA'):(typeMap[mktVal]||'Acción USA');
+  // Gasto: si el ticker es ARS, la moneda es ARS; sino USD. Para ventas normales usa isARS(type).
+  const isA = isGasto ? (ticker.toUpperCase()==='ARS' || ticker.toUpperCase()==='PESOS')
+                      : isARS(type);
   const c=ccl();
-  const priceUSD=isA?price/c:price;
+  const priceUSD=isGasto ? (isA?1/c:1) : (isA?price/c:price);
   const commUSD=(parseFloat(el('oComm').value)||0)/(isA?c:1);
   const broker = el('oBroker').value;
   const orderDate = el('oDate').value||new Date().toISOString().slice(0,10);
-  const isCompra = el('oAction').value === 'Compra';
+  const isCompra = actVal === 'Compra';
+  const userNotes = el('oNotes').value || '';
+  const finalNotes = isGasto ? (userNotes ? `Gasto/Retiro: ${userNotes}` : 'Gasto/Retiro') : userNotes;
   orders.push({
     id:Date.now(),ticker,type,
     action:isCompra?'Compra':'Venta',
-    qty,price:priceUSD,priceOrig:price,
+    qty,price:priceUSD,priceOrig:isGasto?1:price,
     currency:isA?'ARS':'USD',cclAtOrder:isA?c:null,
     comm:commUSD,broker,
     date:orderDate,
-    notes:el('oNotes').value,
+    notes:finalNotes,
+    expense: isGasto ? true : undefined,
   });
   // Auto-adjust USD/USDT liquidity for non-ARS brokers
-  if(!isA && broker && !isARSBroker(broker)){
+  // NO aplicar para Gastos/Retiros (la orden ya es la salida directa de liquidez).
+  if(!isGasto && !isA && broker && !isARSBroker(broker)){
     const totalUSD = qty * priceUSD + commUSD;
     // Check for USD or USDT liquidity in this broker
     const stableTickers = ['USD','USDT','USDC'];
