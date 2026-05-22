@@ -972,12 +972,28 @@ function getPortfolio(broker=null){
   const ords = broker ? orders.filter(o=>(o.broker||'').toLowerCase().trim()===(broker||'').toLowerCase().trim()) : orders;
   if(broker) console.log(`getPortfolio(${broker}): ${ords.length} orders`, ords.map(o=>`${o.action} ${o.ticker} qty=${o.qty} broker="${o.broker}"`));
   ords.forEach(o=>{
-    if(!map[o.ticker]) map[o.ticker]={ticker:o.ticker,type:o.type||'Acción USA',qty:0,cost:0,comm:0};
+    if(!map[o.ticker]) map[o.ticker]={ticker:o.ticker,type:o.type||'Acción USA',qty:0,cost:0,costOrig:0,comm:0};
     const m=map[o.ticker];
-    if(o.action==='Compra'){m.qty+=o.qty;m.cost+=o.qty*o.price+(o.comm||0);m.comm+=(o.comm||0);}
-    else{const r=m.qty>0?o.qty/m.qty:0;m.cost-=m.cost*r;m.qty-=o.qty;}
+    // costOrig se guarda en la moneda original de la orden (priceOrig). Útil para
+    // mostrar PPC histórico en ARS para activos argentinos sin distorsionarse por CCL.
+    const pOrig = (typeof o.priceOrig === 'number' && o.priceOrig > 0) ? o.priceOrig : (o.price||0);
+    if(o.action==='Compra'){
+      m.qty   += o.qty;
+      m.cost  += o.qty*o.price + (o.comm||0);
+      m.costOrig += o.qty*pOrig;
+      m.comm  += (o.comm||0);
+    } else {
+      const r = m.qty>0 ? o.qty/m.qty : 0;
+      m.cost     -= m.cost*r;
+      m.costOrig -= m.costOrig*r;
+      m.qty      -= o.qty;
+    }
   });
-  return Object.values(map).filter(a=>a.qty>0.0001).map(a=>({...a,avgPrice:a.qty>0?a.cost/a.qty:0}));
+  return Object.values(map).filter(a=>a.qty>0.0001).map(a=>({
+    ...a,
+    avgPrice:     a.qty>0 ? a.cost/a.qty     : 0,   // USD
+    avgPriceOrig: a.qty>0 ? a.costOrig/a.qty : 0,   // moneda original (ARS para CEDEAR/arg/bono)
+  }));
 }
 function enrich(pf){
   const c=ccl();
@@ -1365,7 +1381,10 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
     const dc=a.dayPct!=null?(a.dayPct>=0?'up':'dn'):'neu';
     const gc=a.hasPx?(a.pnl>=0?'up':'dn'):'neu';
     const priceStr=a.hasPx?(isARS(a.type)?$a(a.priceARS):$u(a.price)):'—';
-    const ppcStr=isARS(a.type)?$a(a.avgPrice*c):$u(a.avgPrice);
+    // Para activos ARS mostramos PPC histórico (precio ponderado en pesos al
+    // momento de cada compra). Para activos USD el avgPrice ya está en dólares.
+    const ppcARS = (a.avgPriceOrig>0) ? a.avgPriceOrig : (a.avgPrice*c);
+    const ppcStr=isARS(a.type)?$a(ppcARS):$u(a.avgPrice);
     const totStr=a.hasPx?(isARS(a.type)?$a(a.value*c):$u(a.value)):'—';
     const tr=document.createElement('tr');
     // Asset cell
