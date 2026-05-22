@@ -486,6 +486,16 @@ body.dark #auth-welcome h2{color:#90caf9}
     </div>
   </div>
 </div><!-- /body-wrap -->
+<!-- FUNDAMENTALS OVERLAY -->
+<div class="overlay" id="overlay-fund">
+<div class="modal" style="max-width:780px;max-height:90vh;overflow-y:auto">
+  <div class="modal-hdr">
+    <h2 id="fundTitle">Fundamentales</h2>
+    <button class="modal-x" onclick="closeOverlay('fund')">×</button>
+  </div>
+  <div id="fundBody" style="font-size:13px">Cargando...</div>
+</div>
+</div>
 <!-- EDIT ORDER OVERLAY -->
 <div class="overlay" id="overlay-edit">
 <div class="modal" style="max-width:420px">
@@ -1392,7 +1402,7 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
     const cell=document.createElement('div');cell.className='asset-cell';
     cell.appendChild(makeLogo(a.ticker,a.type,26));
     const info=document.createElement('div');info.className='ainfo';
-    info.innerHTML=`<div class="tkr">${a.ticker}</div><div class="typ">${a.type}</div>`;
+    info.innerHTML=`<div class="tkr" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:var(--muted);text-underline-offset:3px" title="Ver fundamentales" onclick="openFundamentals('${a.ticker}','${a.type}')">${a.ticker}</div><div class="typ">${a.type}</div>`;
     if(a.brkList?.length){
       const bd=document.createElement('div');bd.className='brks';
       a.brkList.forEach(b=>{const s=document.createElement('span');s.className='brk-tag';s.textContent=b;bd.appendChild(s);});
@@ -1854,6 +1864,157 @@ async function loadSidebar(){
     }catch(e){}
   }
   el('newsPanel').innerHTML='<div class="side-msg">Sin noticias disponibles</div>';
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// FUNDAMENTALS MODAL  (Yahoo Finance quoteSummary)
+// ═══════════════════════════════════════════════════════════════════════════
+// Map de tickers cripto a Yahoo (BTC → BTC-USD, etc.)
+const CRYPTO_YAHOO = {BTC:'BTC-USD',ETH:'ETH-USD',SOL:'SOL-USD',USDT:'USDT-USD',USDC:'USDC-USD',BNB:'BNB-USD',XRP:'XRP-USD',ADA:'ADA-USD',DOGE:'DOGE-USD',MATIC:'MATIC-USD',DOT:'DOT-USD',AVAX:'AVAX-USD',LINK:'LINK-USD',TRX:'TRX-USD',LTC:'LTC-USD'};
+
+function yahooSymbolFor(ticker, type){
+  const t = (ticker||'').toUpperCase();
+  if(/Cripto/i.test(type||'')) return CRYPTO_YAHOO[t] || `${t}-USD`;
+  if(/Argentina/i.test(type||'')) return `${t}.BA`;
+  return t; // CEDEAR / USA / ETF / Bono — Yahoo tiene el ticker base
+}
+
+function fmtPct(x){ if(x==null||isNaN(x)) return '—'; return (x>=0?'+':'')+n2(x*100,2)+'%'; }
+function fmtBig(n){
+  if(n==null||isNaN(n)) return '—';
+  const abs = Math.abs(n);
+  if(abs >= 1e12) return '$'+n2(n/1e12,2)+' T';
+  if(abs >= 1e9)  return '$'+n2(n/1e9,2)+' B';
+  if(abs >= 1e6)  return '$'+n2(n/1e6,2)+' M';
+  return '$'+n2(n,0);
+}
+function fmtNum(n,d=2){ return (n==null||isNaN(n)) ? '—' : n2(n,d); }
+
+async function fetchFundamentals(symbol){
+  const modules = 'price,summaryDetail,defaultKeyStatistics,financialData,assetProfile,calendarEvents';
+  const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
+  const proxies = [
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  ];
+  for(const proxy of proxies){
+    try{
+      const r = await fetch(proxy(url));
+      if(!r.ok) continue;
+      const d = await r.json();
+      const result = d?.quoteSummary?.result?.[0];
+      if(result) return result;
+    } catch(e){ /* prueba siguiente proxy */ }
+  }
+  return null;
+}
+
+// Helper: Yahoo devuelve {raw, fmt} en muchos campos
+function yv(x){ return (x && typeof x === 'object' && 'raw' in x) ? x.raw : x; }
+
+function openFundamentals(ticker, type){
+  el('fundTitle').textContent = `📊 ${ticker} — Fundamentales`;
+  el('fundBody').innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)">Cargando datos…</div>';
+  openOverlay('fund');
+  const symbol = yahooSymbolFor(ticker, type);
+  fetchFundamentals(symbol).then(r => {
+    if(!r){
+      el('fundBody').innerHTML = `<div style="padding:20px;color:var(--red)">No se pudieron obtener datos de ${symbol}. Probá refrescar.</div>`;
+      return;
+    }
+    const p   = r.price || {};
+    const sd  = r.summaryDetail || {};
+    const ks  = r.defaultKeyStatistics || {};
+    const fd  = r.financialData || {};
+    const ap  = r.assetProfile || {};
+    const ce  = r.calendarEvents || {};
+
+    const longName = yv(p.longName) || yv(p.shortName) || ticker;
+    const exch     = yv(p.exchangeName) || '';
+    const curr     = yv(p.currency) || 'USD';
+    const sector   = yv(ap.sector) || '';
+    const industry = yv(ap.industry) || '';
+    const summary  = yv(ap.longBusinessSummary) || '';
+    const website  = yv(ap.website) || '';
+
+    // earnings date puede venir como array de timestamps unix
+    let earnDate = '';
+    const earnRaw = ce.earnings?.earningsDate;
+    if(Array.isArray(earnRaw) && earnRaw.length){
+      const ts = yv(earnRaw[0]);
+      if(ts) earnDate = new Date(ts*1000).toISOString().slice(0,10);
+    }
+
+    const rows = (label, value) => `<tr><td style="padding:6px 10px;color:var(--muted)">${label}</td><td style="padding:6px 10px;font-weight:600;text-align:right;font-family:monospace">${value}</td></tr>`;
+
+    el('fundBody').innerHTML = `
+      <div style="margin-bottom:14px">
+        <div style="font-weight:600;font-size:16px">${longName}</div>
+        <div style="color:var(--muted);font-size:11px">${symbol}${exch?' · '+exch:''}${curr?' · '+curr:''}${sector?' · '+sector:''}${industry?' · '+industry:''}</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <h3 style="font-size:12px;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 6px">Valuación</h3>
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            ${rows('Precio actual',         fmtNum(yv(p.regularMarketPrice),2))}
+            ${rows('Market Cap',            fmtBig(yv(p.marketCap)))}
+            ${rows('PER (trailing)',        fmtNum(yv(sd.trailingPE),2))}
+            ${rows('PER forward',           fmtNum(yv(sd.forwardPE),2))}
+            ${rows('Price / Book',          fmtNum(yv(ks.priceToBook),2))}
+            ${rows('Enterprise Value',      fmtBig(yv(ks.enterpriseValue)))}
+            ${rows('EV / Revenue',          fmtNum(yv(ks.enterpriseToRevenue),2))}
+            ${rows('EV / EBITDA',           fmtNum(yv(ks.enterpriseToEbitda),2))}
+            ${rows('Beta',                  fmtNum(yv(sd.beta),2))}
+          </table>
+
+          <h3 style="font-size:12px;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px">Earnings</h3>
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            ${rows('EPS (trailing)',        fmtNum(yv(ks.trailingEps),2))}
+            ${rows('EPS forward',           fmtNum(yv(ks.forwardEps),2))}
+            ${rows('Crec. ganancias (Q)',   fmtPct(yv(fd.earningsGrowth)))}
+            ${rows('Crec. ventas (Q)',      fmtPct(yv(fd.revenueGrowth)))}
+            ${rows('Próx. earnings',        earnDate||'—')}
+          </table>
+        </div>
+
+        <div>
+          <h3 style="font-size:12px;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 6px">Rentabilidad</h3>
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            ${rows('Margen bruto',          fmtPct(yv(fd.grossMargins)))}
+            ${rows('Margen operativo',      fmtPct(yv(fd.operatingMargins)))}
+            ${rows('Margen neto',           fmtPct(yv(fd.profitMargins)))}
+            ${rows('ROE',                   fmtPct(yv(fd.returnOnEquity)))}
+            ${rows('ROA',                   fmtPct(yv(fd.returnOnAssets)))}
+          </table>
+
+          <h3 style="font-size:12px;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px">Salud financiera</h3>
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            ${rows('Caja total',            fmtBig(yv(fd.totalCash)))}
+            ${rows('Deuda total',           fmtBig(yv(fd.totalDebt)))}
+            ${rows('Deuda / Equity',        fmtNum(yv(fd.debtToEquity),2))}
+            ${rows('Current Ratio',         fmtNum(yv(fd.currentRatio),2))}
+            ${rows('Free Cash Flow',        fmtBig(yv(fd.freeCashflow)))}
+          </table>
+
+          <h3 style="font-size:12px;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px;margin:14px 0 6px">Mercado</h3>
+          <table style="width:100%;font-size:12px;border-collapse:collapse">
+            ${rows('52w High',              fmtNum(yv(sd.fiftyTwoWeekHigh),2))}
+            ${rows('52w Low',               fmtNum(yv(sd.fiftyTwoWeekLow),2))}
+            ${rows('Dividend Yield',        fmtPct(yv(sd.dividendYield)))}
+            ${rows('Vol. promedio',         fmtBig(yv(sd.averageVolume)))}
+          </table>
+        </div>
+      </div>
+
+      ${summary ? `<div style="margin-top:16px;padding:10px 12px;background:var(--card);border-radius:8px;font-size:12px;line-height:1.5;color:var(--muted)">
+        <div style="font-weight:600;color:var(--blue);margin-bottom:4px;text-transform:uppercase;font-size:11px;letter-spacing:0.5px">Sobre la empresa</div>
+        ${summary.length > 600 ? summary.slice(0,600)+'…' : summary}
+        ${website?`<div style="margin-top:6px"><a href="${website}" target="_blank" rel="noreferrer" style="color:var(--blue)">${website}</a></div>`:''}
+      </div>` : ''}
+
+      <div style="margin-top:14px;text-align:right;font-size:10px;color:var(--muted)">Fuente: Yahoo Finance · ${symbol}</div>
+    `;
+  });
 }
 // ═══════════════════════════════════════════════════════════════════════════
 // ORDER MODAL
