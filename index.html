@@ -1889,7 +1889,84 @@ function fmtBig(n){
 }
 function fmtNum(n,d=2){ return (n==null||isNaN(n)) ? '—' : n2(n,d); }
 
-async function fetchFundamentals(symbol){
+// Helper: Yahoo devuelve {raw, fmt} en muchos campos
+function yv(x){ return (x && typeof x === 'object' && 'raw' in x) ? x.raw : x; }
+
+// Convierte un objeto Alpha Vantage OVERVIEW al shape "tipo Yahoo" que usa el render.
+// AV devuelve strings; los pasamos a número y los empaquetamos como {raw}.
+function avToYahooShape(av){
+  if(!av || !av.Symbol) return null;
+  const num = s => { const n=parseFloat(s); return isNaN(n)?null:n; };
+  // AV devuelve márgenes y crecimientos como decimales (0.45 = 45%) o ya en formato 0.x.
+  // Dividend yield viene como decimal (0.025 = 2.5%).
+  return {
+    price: {
+      longName:   {raw: av.Name},
+      shortName:  {raw: av.Symbol},
+      exchangeName:{raw: av.Exchange},
+      currency:   {raw: av.Currency},
+      regularMarketPrice: {raw: null}, // AV no devuelve precio en OVERVIEW (lo inyectamos del cache local)
+      analystTargetPrice: {raw: num(av.AnalystTargetPrice)},
+      marketCap:  {raw: num(av.MarketCapitalization)},
+    },
+    summaryDetail: {
+      trailingPE: {raw: num(av.TrailingPE)},
+      forwardPE:  {raw: num(av.ForwardPE)},
+      dividendYield: {raw: num(av.DividendYield)},
+      fiftyTwoWeekHigh: {raw: num(av['52WeekHigh'])},
+      fiftyTwoWeekLow:  {raw: num(av['52WeekLow'])},
+      beta: {raw: num(av.Beta)},
+      averageVolume: {raw: null},
+    },
+    defaultKeyStatistics: {
+      trailingEps: {raw: num(av.EPS)},
+      forwardEps:  {raw: num(av.DilutedEPSTTM)},
+      priceToBook: {raw: num(av.PriceToBookRatio)},
+      enterpriseValue: {raw: null},
+      enterpriseToRevenue: {raw: num(av.EVToRevenue)},
+      enterpriseToEbitda:  {raw: num(av.EVToEBITDA)},
+    },
+    financialData: {
+      grossMargins:     {raw: null},
+      operatingMargins: {raw: num(av.OperatingMarginTTM)},
+      profitMargins:    {raw: num(av.ProfitMargin)},
+      returnOnEquity:   {raw: num(av.ReturnOnEquityTTM)},
+      returnOnAssets:   {raw: num(av.ReturnOnAssetsTTM)},
+      earningsGrowth:   {raw: num(av.QuarterlyEarningsGrowthYOY)},
+      revenueGrowth:    {raw: num(av.QuarterlyRevenueGrowthYOY)},
+      totalCash:        {raw: null},
+      totalDebt:        {raw: null},
+      debtToEquity:     {raw: null},
+      currentRatio:     {raw: null},
+      freeCashflow:     {raw: null},
+    },
+    assetProfile: {
+      sector:   {raw: av.Sector},
+      industry: {raw: av.Industry},
+      longBusinessSummary: {raw: av.Description},
+      website:  {raw: av.OfficialSite || ''},
+    },
+    calendarEvents: {},
+    _source: 'Alpha Vantage',
+  };
+}
+
+async function fetchFundamentalsAV(symbol){
+  // Alpha Vantage solo soporta tickers US (sin sufijo .BA). Si llega con .BA lo quito.
+  const s = symbol.replace(/\.BA$/i,'');
+  // Sin proxy: AV tiene CORS abierto.
+  const url = `https://www.alphavantage.co/query?function=OVERVIEW&symbol=${encodeURIComponent(s)}&apikey=${AV}`;
+  try{
+    const r = await fetch(url);
+    if(!r.ok) return null;
+    const d = await r.json();
+    if(d?.Note || d?.Information){ console.warn('Alpha Vantage rate limit/info:', d.Note||d.Information); return null; }
+    if(!d?.Symbol) return null;
+    return avToYahooShape(d);
+  } catch(e){ console.warn('AV error:', e); return null; }
+}
+
+async function fetchFundamentalsYahoo(symbol){
   const modules = 'price,summaryDetail,defaultKeyStatistics,financialData,assetProfile,calendarEvents';
   const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
   const proxies = [
@@ -1902,23 +1979,70 @@ async function fetchFundamentals(symbol){
       if(!r.ok) continue;
       const d = await r.json();
       const result = d?.quoteSummary?.result?.[0];
-      if(result) return result;
+      if(result) { result._source='Yahoo'; return result; }
     } catch(e){ /* prueba siguiente proxy */ }
   }
   return null;
 }
 
-// Helper: Yahoo devuelve {raw, fmt} en muchos campos
-function yv(x){ return (x && typeof x === 'object' && 'raw' in x) ? x.raw : x; }
+async function fetchFundamentalsCrypto(ticker){
+  // CoinGecko: alguna info básica (market cap, supply, ATH, etc.)
+  const COIN_MAP = {BTC:'bitcoin',ETH:'ethereum',SOL:'solana',USDT:'tether',USDC:'usd-coin',BNB:'binancecoin',XRP:'ripple',ADA:'cardano',DOGE:'dogecoin',MATIC:'matic-network',DOT:'polkadot',AVAX:'avalanche-2',LINK:'chainlink',TRX:'tron',LTC:'litecoin'};
+  const id = COIN_MAP[ticker.toUpperCase()];
+  if(!id) return null;
+  try{
+    const r = await fetch(`https://api.coingecko.com/api/v3/coins/${id}?localization=false&tickers=false&community_data=false&developer_data=false`);
+    if(!r.ok) return null;
+    const d = await r.json();
+    return {
+      price: {
+        longName: {raw: d.name},
+        shortName:{raw: d.symbol?.toUpperCase()},
+        exchangeName:{raw:'Crypto'},
+        currency:{raw:'USD'},
+        regularMarketPrice:{raw: d.market_data?.current_price?.usd},
+        marketCap:{raw: d.market_data?.market_cap?.usd},
+      },
+      summaryDetail: {
+        fiftyTwoWeekHigh:{raw: d.market_data?.ath?.usd},
+        fiftyTwoWeekLow: {raw: d.market_data?.atl?.usd},
+        averageVolume:   {raw: d.market_data?.total_volume?.usd},
+        dividendYield:{raw:null}, trailingPE:{raw:null}, forwardPE:{raw:null}, beta:{raw:null},
+      },
+      defaultKeyStatistics: {trailingEps:{raw:null},forwardEps:{raw:null},priceToBook:{raw:null},enterpriseValue:{raw:null},enterpriseToRevenue:{raw:null},enterpriseToEbitda:{raw:null}},
+      financialData: {grossMargins:{raw:null},operatingMargins:{raw:null},profitMargins:{raw:null},returnOnEquity:{raw:null},returnOnAssets:{raw:null},earningsGrowth:{raw:null},revenueGrowth:{raw:null},totalCash:{raw:null},totalDebt:{raw:null},debtToEquity:{raw:null},currentRatio:{raw:null},freeCashflow:{raw:null}},
+      assetProfile: {
+        sector:{raw:'Cryptocurrency'},
+        industry:{raw: d.categories?.join(', ')||''},
+        longBusinessSummary:{raw: (d.description?.en||'').replace(/<[^>]*>/g,'').slice(0,800)},
+        website:{raw: d.links?.homepage?.[0]||''},
+      },
+      calendarEvents: {},
+      _source: 'CoinGecko',
+    };
+  } catch(e){ console.warn('CoinGecko error:', e); return null; }
+}
+
+async function fetchFundamentals(symbol, type){
+  // Cripto → CoinGecko
+  if(/Cripto/i.test(type||'')){
+    const baseTicker = symbol.replace(/-USD$/i,'');
+    return await fetchFundamentalsCrypto(baseTicker);
+  }
+  // Acción/CEDEAR/Bono → Alpha Vantage primario, Yahoo fallback
+  const av = await fetchFundamentalsAV(symbol);
+  if(av) return av;
+  return await fetchFundamentalsYahoo(symbol);
+}
 
 function openFundamentals(ticker, type){
   el('fundTitle').textContent = `📊 ${ticker} — Fundamentales`;
   el('fundBody').innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)">Cargando datos…</div>';
   openOverlay('fund');
   const symbol = yahooSymbolFor(ticker, type);
-  fetchFundamentals(symbol).then(r => {
+  fetchFundamentals(symbol, type).then(r => {
     if(!r){
-      el('fundBody').innerHTML = `<div style="padding:20px;color:var(--red)">No se pudieron obtener datos de ${symbol}. Probá refrescar.</div>`;
+      el('fundBody').innerHTML = `<div style="padding:20px;color:var(--red)">No se pudieron obtener datos de <strong>${symbol}</strong>.<br><br>Posibles causas:<ul style="margin-top:8px;font-size:12px"><li>Alpha Vantage llegó al límite de 25 requests/día (gratis)</li><li>Ticker no soportado (ej: acciones argentinas que no listan en USA)</li><li>Yahoo Finance bloqueado vía proxy CORS</li></ul></div>`;
       return;
     }
     const p   = r.price || {};
@@ -1927,6 +2051,11 @@ function openFundamentals(ticker, type){
     const fd  = r.financialData || {};
     const ap  = r.assetProfile || {};
     const ce  = r.calendarEvents || {};
+    // Si la fuente no trajo precio actual, lo tomamos del cache local de la app
+    if(!yv(p.regularMarketPrice)){
+      const localPx = prices[ticker];
+      if(localPx > 0) p.regularMarketPrice = {raw: localPx};
+    }
 
     const longName = yv(p.longName) || yv(p.shortName) || ticker;
     const exch     = yv(p.exchangeName) || '';
@@ -2012,7 +2141,7 @@ function openFundamentals(ticker, type){
         ${website?`<div style="margin-top:6px"><a href="${website}" target="_blank" rel="noreferrer" style="color:var(--blue)">${website}</a></div>`:''}
       </div>` : ''}
 
-      <div style="margin-top:14px;text-align:right;font-size:10px;color:var(--muted)">Fuente: Yahoo Finance · ${symbol}</div>
+      <div style="margin-top:14px;text-align:right;font-size:10px;color:var(--muted)">Fuente: ${r._source||'Yahoo Finance'} · ${symbol}</div>
     `;
   });
 }
