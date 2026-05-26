@@ -349,9 +349,9 @@ body.dark #auth-welcome h2{color:#90caf9}
   <div class="sc">
     <label>Tipo de cambio</label>
     <div class="fx-box">
-      <div class="fx-item"><label>Blue</label><div class="val" id="sBlue">$—</div></div>
-      <div class="fx-item"><label>MEP</label><div class="val" id="sMep">$—</div></div>
-      <div class="fx-item"><label>CCL</label><div class="val" id="sCcl">$—</div></div>
+      <div class="fx-item" style="cursor:pointer" title="Ver Blue en TradingView" onclick="window.open('https://www.tradingview.com/chart/?symbol=FX_IDC:USDARS','_blank')"><label>Blue</label><div class="val" id="sBlue">$—</div></div>
+      <div class="fx-item" style="cursor:pointer" title="Ver MEP/CCL en TradingView" onclick="window.open('https://www.tradingview.com/chart/?symbol=BCBA:AL30D%2FBCBA:AL30','_blank')"><label>MEP</label><div class="val" id="sMep">$—</div></div>
+      <div class="fx-item" style="cursor:pointer" title="Ver MEP/CCL en TradingView" onclick="window.open('https://www.tradingview.com/chart/?symbol=BCBA:AL30C%2FBCBA:AL30','_blank')"><label>CCL</label><div class="val" id="sCcl">$—</div></div>
     </div>
   </div>
 </div>
@@ -437,15 +437,15 @@ body.dark #auth-welcome h2{color:#90caf9}
         <canvas id="lineChart" style="display:none" height="180"></canvas>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div class="chart-box">
-          <h3>Composición por activo</h3>
+        <div class="chart-box" style="cursor:pointer" title="Click para expandir" onclick="openPieModal({title:'Composición por activo',group:'ticker'})">
+          <h3>Composición por activo <span style="font-size:11px;color:var(--muted);font-weight:400">(click para expandir)</span></h3>
           <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
             <canvas id="pieChart" width="150" height="150" style="flex-shrink:0"></canvas>
             <div id="pieLegend" class="pie-legend"></div>
           </div>
         </div>
-        <div class="chart-box">
-          <h3>ARS vs USD</h3>
+        <div class="chart-box" style="cursor:pointer" title="Click para expandir" onclick="openPieModal({title:'ARS vs USD',group:'currency'})">
+          <h3>ARS vs USD <span style="font-size:11px;color:var(--muted);font-weight:400">(click para expandir)</span></h3>
           <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
             <canvas id="arsUsdChart" width="150" height="150" style="flex-shrink:0"></canvas>
             <div id="arsUsdLegend" class="pie-legend"></div>
@@ -469,7 +469,7 @@ body.dark #auth-welcome h2{color:#90caf9}
         </div>
       </div>
     </div>
-    <div class="side-box" id="sidebarPieBox">
+    <div class="side-box" id="sidebarPieBox" style="cursor:pointer" title="Click para expandir" onclick="openPieModal({title:'Composición del portafolio',group:'ticker'})">
       <div class="side-hdr">🥧 <span id="sidebarPieTitle">Composición</span></div>
       <div style="padding:10px;display:flex;gap:8px;align-items:center">
         <canvas id="sidebarPieCanvas" width="100" height="100" style="flex-shrink:0"></canvas>
@@ -486,6 +486,67 @@ body.dark #auth-welcome h2{color:#90caf9}
     </div>
   </div>
 </div><!-- /body-wrap -->
+<!-- PIE CHART EXPANDED OVERLAY -->
+<div class="overlay" id="overlay-pie">
+<div class="modal" style="max-width:900px;max-height:92vh;overflow-y:auto">
+  <div class="modal-hdr">
+    <h2 id="pieTitle">🥧 Composición del portafolio</h2>
+    <button class="modal-x" onclick="closeOverlay('pie')">×</button>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;padding:10px;background:var(--card);border-radius:8px">
+    <div style="flex:1;min-width:140px">
+      <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">Broker</label>
+      <select id="pieFilterBroker" onchange="renderPieModal()" style="width:100%"></select>
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">Tipo de activo</label>
+      <select id="pieFilterType" onchange="renderPieModal()" style="width:100%">
+        <option value="">Todos los tipos</option>
+        <option value="Acción USA">Acción USA</option>
+        <option value="CEDEAR">CEDEAR</option>
+        <option value="Acción Argentina">Acción Argentina</option>
+        <option value="Cripto">Cripto</option>
+        <option value="Bono/Renta Fija">Bono/Renta Fija</option>
+      </select>
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">Moneda visualización</label>
+      <select id="pieFilterCurrency" onchange="renderPieModal()" style="width:100%">
+        <option value="USD">USD</option>
+        <option value="ARS">ARS</option>
+      </select>
+    </div>
+    <div style="flex:1;min-width:140px">
+      <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">Agrupar por</label>
+      <select id="pieFilterGroup" onchange="renderPieModal()" style="width:100%">
+        <option value="ticker">Activo (ticker)</option>
+        <option value="type">Tipo de activo</option>
+        <option value="broker">Broker</option>
+      </select>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start">
+    <div style="text-align:center">
+      <canvas id="pieBigCanvas" width="320" height="320"></canvas>
+      <div id="pieBigTotal" style="margin-top:10px;font-size:14px;color:var(--muted)"></div>
+    </div>
+    <div>
+      <div id="pieBigEmpty" style="display:none;text-align:center;padding:30px;color:var(--muted)">Sin datos para mostrar con estos filtros.</div>
+      <table id="pieBigTable" style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead>
+          <tr style="border-bottom:2px solid var(--blueL);text-align:left">
+            <th style="padding:6px 8px">Activo</th>
+            <th style="padding:6px 8px;text-align:right">%</th>
+            <th style="padding:6px 8px;text-align:right">Valor</th>
+            <th style="padding:6px 8px;text-align:right">P&L</th>
+          </tr>
+        </thead>
+        <tbody id="pieBigTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
 <!-- FUNDAMENTALS OVERLAY -->
 <div class="overlay" id="overlay-fund">
 <div class="modal" style="max-width:780px;max-height:90vh;overflow-y:auto">
@@ -1827,20 +1888,22 @@ async function loadSidebar(){
     try{const r=await fetch('https://dolarapi.com/v1/dolares/blue');const d=await r.json();if(d.venta>100)mkt.dblue={price:d.venta,buy:d.compra};}catch(e){}
   }
   const rows=[
-    {label:'S&P 500',d:mkt.sp500,dp:0},
-    {label:'Nasdaq 100',d:mkt.ndx,dp:0},
-    {label:'Oro (USD/oz)',d:mkt.gold,dp:0},
-    {label:'WTI (USD/bbl)',d:mkt.wti,dp:2},
-    {label:'Bitcoin',d:mkt.btc,dp:0},
-    {label:'Merval',d:mkt.merval,dp:0,ars:true},
+    {label:'S&P 500',     d:mkt.sp500,  dp:0, tv:'SP:SPX'},
+    {label:'Nasdaq 100',  d:mkt.ndx,    dp:0, tv:'NASDAQ:NDX'},
+    {label:'Oro (USD/oz)',d:mkt.gold,   dp:0, tv:'TVC:GOLD'},
+    {label:'WTI (USD/bbl)',d:mkt.wti,   dp:2, tv:'TVC:USOIL'},
+    {label:'Bitcoin',     d:mkt.btc,    dp:0, tv:'BINANCE:BTCUSDT'},
+    {label:'Merval',      d:mkt.merval, dp:0, ars:true, tv:'BCBA:MERV'},
   ];
   el('quotesPanel').innerHTML=rows.map(r=>{
-    if(!r.d) return `<div class="quote-row"><span class="quote-name">${r.label}</span><span class="quote-price" style="color:var(--muted)">—</span></div>`;
+    const tvLink = r.tv ? `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(r.tv)}` : '#';
+    const clickHandler = `onclick="window.open('${tvLink}','_blank')"`;
+    if(!r.d) return `<div class="quote-row" style="cursor:pointer" title="Ver en TradingView" ${clickHandler}><span class="quote-name">${r.label}</span><span class="quote-price" style="color:var(--muted)">—</span></div>`;
     const dp=r.dp!=null?r.dp:2;
     const priceStr=r.ars?`$${n2(r.d.price,0)} ARS`:`$${n2(r.d.price,dp)}`;
     const chgPct=r.d.chgPct!=null?r.d.chgPct:null;
     const cls=chgPct>=0?'up':'dn';
-    return `<div class="quote-row"><span class="quote-name">${r.label}</span>
+    return `<div class="quote-row" style="cursor:pointer" title="Ver ${r.label} en TradingView" ${clickHandler}><span class="quote-name">${r.label}</span>
       <div class="quote-right"><span class="quote-price">${priceStr}</span>
       ${chgPct!=null?`<span class="chg ${cls}">${chgPct>=0?'+':''}${n2(chgPct,2)}%</span>`:''}</div></div>`;
   }).join('');
@@ -2035,6 +2098,103 @@ async function fetchFundamentals(symbol, type){
   return await fetchFundamentalsYahoo(symbol);
 }
 
+// Históricos — Yahoo chart 1Y (precio diario)
+async function fetchPriceHistory1Y(symbol){
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1y&interval=1d`;
+  const proxies = [
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  ];
+  for(const proxy of proxies){
+    try{
+      const r = await fetch(proxy(url));
+      if(!r.ok) continue;
+      const d = await r.json();
+      const res = d?.chart?.result?.[0];
+      if(!res) continue;
+      const ts = res.timestamp || [];
+      const closes = res.indicators?.quote?.[0]?.close || [];
+      const out = [];
+      for(let i=0; i<ts.length; i++){
+        if(typeof closes[i] === 'number' && closes[i] > 0){
+          out.push({ date: new Date(ts[i]*1000), close: closes[i] });
+        }
+      }
+      if(out.length) return out;
+    } catch(e){}
+  }
+  return null;
+}
+
+// Alpha Vantage EARNINGS — EPS últimos trimestres
+async function fetchEarningsAV(symbol){
+  const s = symbol.replace(/\.BA$/i,'');
+  const url = `https://www.alphavantage.co/query?function=EARNINGS&symbol=${encodeURIComponent(s)}&apikey=${AV}`;
+  try{
+    const r = await fetch(url);
+    if(!r.ok) return null;
+    const d = await r.json();
+    if(d?.Note || d?.Information) return null;
+    return d?.quarterlyEarnings || null;
+  } catch(e){ return null; }
+}
+
+// Alpha Vantage INCOME_STATEMENT — Revenue + márgenes últimos años
+async function fetchIncomeAV(symbol){
+  const s = symbol.replace(/\.BA$/i,'');
+  const url = `https://www.alphavantage.co/query?function=INCOME_STATEMENT&symbol=${encodeURIComponent(s)}&apikey=${AV}`;
+  try{
+    const r = await fetch(url);
+    if(!r.ok) return null;
+    const d = await r.json();
+    if(d?.Note || d?.Information) return null;
+    return d?.annualReports || null;
+  } catch(e){ return null; }
+}
+
+// Render del gráfico de precio histórico (usa Chart.js)
+let _fundPriceChart = null;
+function renderFundPriceChart(history){
+  if(!history || !history.length) return;
+  const canvas = el('fundPriceCanvas');
+  if(!canvas) return;
+  if(_fundPriceChart){ _fundPriceChart.destroy(); _fundPriceChart=null; }
+  // Tomar 1 cada N puntos para no saturar
+  const step = Math.max(1, Math.floor(history.length / 80));
+  const sampled = history.filter((_, i) => i % step === 0);
+  if(history.length && sampled[sampled.length-1].date !== history[history.length-1].date){
+    sampled.push(history[history.length-1]); // siempre incluir el último
+  }
+  const first = history[0].close;
+  const last  = history[history.length-1].close;
+  const upClr = last >= first ? 'rgba(0,168,118,0.85)' : 'rgba(229,57,53,0.85)';
+  const upBg  = last >= first ? 'rgba(0,168,118,0.12)' : 'rgba(229,57,53,0.12)';
+  _fundPriceChart = new Chart(canvas, {
+    type:'line',
+    data:{
+      labels: sampled.map(p => p.date.toISOString().slice(0,10)),
+      datasets:[{
+        label:'Precio',
+        data: sampled.map(p => p.close),
+        borderColor: upClr,
+        backgroundColor: upBg,
+        borderWidth: 2,
+        fill:true,
+        tension: 0.25,
+        pointRadius: 0,
+      }]
+    },
+    options:{
+      responsive: false,
+      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:(it)=>`$${n2(it.parsed.y,2)}` } } },
+      scales:{
+        x:{ ticks:{ maxTicksLimit:8, font:{size:9} }, grid:{display:false} },
+        y:{ ticks:{ font:{size:9}, callback:v=>'$'+n2(v,0) }, grid:{color:'rgba(0,0,0,0.05)'} }
+      }
+    }
+  });
+}
+
 function openFundamentals(ticker, type){
   el('fundTitle').textContent = `📊 ${ticker} — Fundamentales`;
   el('fundBody').innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)">Cargando datos…</div>';
@@ -2141,8 +2301,218 @@ function openFundamentals(ticker, type){
         ${website?`<div style="margin-top:6px"><a href="${website}" target="_blank" rel="noreferrer" style="color:var(--blue)">${website}</a></div>`:''}
       </div>` : ''}
 
+      <!-- Históricos -->
+      <h3 style="font-size:12px;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px;margin:18px 0 8px">📈 Precio últimos 12 meses</h3>
+      <div id="fundPriceWrap" style="background:var(--card);border-radius:8px;padding:10px"><canvas id="fundPriceCanvas" width="720" height="180"></canvas><div id="fundPriceMsg" style="color:var(--muted);font-size:11px;text-align:center;padding:20px">Cargando precio histórico…</div></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+        <div>
+          <h3 style="font-size:12px;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 6px">📊 EPS — últimos 8 trim.</h3>
+          <div id="fundEpsWrap" style="background:var(--card);border-radius:8px;padding:8px"><div style="color:var(--muted);font-size:11px;text-align:center;padding:14px" id="fundEpsMsg">Cargando…</div></div>
+        </div>
+        <div>
+          <h3 style="font-size:12px;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px;margin:0 0 6px">💰 Revenue + márgenes — 4 años</h3>
+          <div id="fundIncomeWrap" style="background:var(--card);border-radius:8px;padding:8px"><div style="color:var(--muted);font-size:11px;text-align:center;padding:14px" id="fundIncomeMsg">Cargando…</div></div>
+        </div>
+      </div>
+
       <div style="margin-top:14px;text-align:right;font-size:10px;color:var(--muted)">Fuente: ${r._source||'Yahoo Finance'} · ${symbol}</div>
     `;
+
+    // ─── Históricos: fetch en paralelo ─────────────────────────────
+    const isCrypto = /Cripto/i.test(type||'');
+    // Precio (Yahoo) — funciona para todos
+    fetchPriceHistory1Y(symbol).then(history => {
+      if(history && history.length){
+        el('fundPriceMsg').style.display = 'none';
+        renderFundPriceChart(history);
+      } else {
+        el('fundPriceMsg').textContent = 'No se pudo obtener precio histórico.';
+      }
+    });
+    // EPS + Income (solo Alpha Vantage, no aplica a cripto)
+    if(isCrypto){
+      el('fundEpsMsg').textContent = 'No aplica para cripto.';
+      el('fundIncomeMsg').textContent = 'No aplica para cripto.';
+    } else {
+      fetchEarningsAV(symbol).then(qe => {
+        const wrap = el('fundEpsWrap');
+        if(!qe || !qe.length){ el('fundEpsMsg').textContent = 'Sin datos (rate limit AV o ticker no soportado).'; return; }
+        const last8 = qe.slice(0, 8);
+        wrap.innerHTML = `<table style="width:100%;font-size:11px;border-collapse:collapse">
+          <thead><tr style="border-bottom:1px solid var(--blueL);text-align:left;color:var(--muted)">
+            <th style="padding:4px 6px">Trim.</th>
+            <th style="padding:4px 6px;text-align:right">EPS</th>
+            <th style="padding:4px 6px;text-align:right">Esperado</th>
+            <th style="padding:4px 6px;text-align:right">Sorpresa</th>
+          </tr></thead>
+          <tbody>${last8.map(q=>{
+            const eps = parseFloat(q.reportedEPS);
+            const est = parseFloat(q.estimatedEPS);
+            const surpPct = parseFloat(q.surprisePercentage);
+            const cls = surpPct>=0?'up':'dn';
+            return `<tr style="border-bottom:1px solid var(--blueL)">
+              <td style="padding:4px 6px;font-family:monospace">${q.fiscalDateEnding||''}</td>
+              <td style="padding:4px 6px;text-align:right;font-family:monospace">${isNaN(eps)?'—':'$'+n2(eps,2)}</td>
+              <td style="padding:4px 6px;text-align:right;font-family:monospace;color:var(--muted)">${isNaN(est)?'—':'$'+n2(est,2)}</td>
+              <td class="${cls}" style="padding:4px 6px;text-align:right;font-family:monospace">${isNaN(surpPct)?'—':((surpPct>=0?'+':'')+n2(surpPct,1)+'%')}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>`;
+      });
+      fetchIncomeAV(symbol).then(annual => {
+        const wrap = el('fundIncomeWrap');
+        if(!annual || !annual.length){ el('fundIncomeMsg').textContent = 'Sin datos (rate limit AV o ticker no soportado).'; return; }
+        const last4 = annual.slice(0, 4).reverse(); // más viejo a más nuevo
+        wrap.innerHTML = `<table style="width:100%;font-size:11px;border-collapse:collapse">
+          <thead><tr style="border-bottom:1px solid var(--blueL);text-align:left;color:var(--muted)">
+            <th style="padding:4px 6px">Año</th>
+            <th style="padding:4px 6px;text-align:right">Revenue</th>
+            <th style="padding:4px 6px;text-align:right">M. bruto</th>
+            <th style="padding:4px 6px;text-align:right">M. operativo</th>
+            <th style="padding:4px 6px;text-align:right">M. neto</th>
+          </tr></thead>
+          <tbody>${last4.map((y, i)=>{
+            const rev   = parseFloat(y.totalRevenue);
+            const gross = parseFloat(y.grossProfit);
+            const opInc = parseFloat(y.operatingIncome);
+            const netInc= parseFloat(y.netIncome);
+            const mg = (rev>0 && !isNaN(gross))? gross/rev : null;
+            const mo = (rev>0 && !isNaN(opInc))? opInc/rev : null;
+            const mn = (rev>0 && !isNaN(netInc))? netInc/rev : null;
+            // Comparar con año anterior para flecha
+            const prev = last4[i-1];
+            const arrow = (cur, p)=>{ if(!prev||cur==null||p==null||isNaN(p)||p===0) return ''; const diff = (cur-p)/Math.abs(p); return diff>0.01 ? ' <span class="up" style="font-size:9px">▲</span>' : diff<-0.01 ? ' <span class="dn" style="font-size:9px">▼</span>' : ''; };
+            const prevRev = prev ? parseFloat(prev.totalRevenue) : null;
+            const fmtMargen = m => m==null ? '—' : n2(m*100,1)+'%';
+            return `<tr style="border-bottom:1px solid var(--blueL)">
+              <td style="padding:4px 6px;font-family:monospace">${(y.fiscalDateEnding||'').slice(0,4)}</td>
+              <td style="padding:4px 6px;text-align:right;font-family:monospace">${fmtBig(rev)}${arrow(rev,prevRev)}</td>
+              <td style="padding:4px 6px;text-align:right;font-family:monospace">${fmtMargen(mg)}</td>
+              <td style="padding:4px 6px;text-align:right;font-family:monospace">${fmtMargen(mo)}</td>
+              <td style="padding:4px 6px;text-align:right;font-family:monospace">${fmtMargen(mn)}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>`;
+      });
+    }
+  });
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// PIE MODAL (Composición expandida con filtros)
+// ═══════════════════════════════════════════════════════════════════════════
+let _pieBigChart = null;
+let _pieModalCtx = null; // contexto inicial pasado al abrir
+
+function openPieModal(ctx){
+  _pieModalCtx = ctx || {};
+  // Setear título
+  el('pieTitle').textContent = '🥧 ' + (ctx?.title || 'Composición del portafolio');
+  // Poblar dropdown de brokers con los disponibles
+  const brokerSel = el('pieFilterBroker');
+  brokerSel.innerHTML = '<option value="">Todos los brokers</option>';
+  brokers.forEach(b => { brokerSel.innerHTML += `<option value="${b}">${b}</option>`; });
+  // Setear grouping inicial según contexto
+  if(ctx?.group) el('pieFilterGroup').value = ctx.group;
+  // Reset otros filtros
+  el('pieFilterType').value = '';
+  el('pieFilterCurrency').value = 'USD';
+  openOverlay('pie');
+  renderPieModal();
+}
+
+function renderPieModal(){
+  const broker   = el('pieFilterBroker').value;
+  const typeF    = el('pieFilterType').value;
+  const cur      = el('pieFilterCurrency').value;
+  const group    = el('pieFilterGroup').value;
+  const c        = ccl();
+
+  // Tomar portafolio (filtrado por broker si aplica)
+  const pfRaw = broker ? getPortfolio(broker) : getPortfolio();
+  // Excluir cash
+  const pfNoCash = pfRaw.filter(a => !isCash(a.ticker));
+  const enriched = enrich(pfNoCash);
+  // Filtro por tipo
+  const filtered = typeF ? enriched.filter(a => a.type === typeF) : enriched;
+
+  // Agrupar
+  const buckets = {};
+  filtered.forEach(a => {
+    if(!a.hasPx) return;
+    let key;
+    if(group === 'ticker')      key = a.ticker;
+    else if(group === 'type')   key = a.type;
+    else if(group === 'broker') key = (a.brkList && a.brkList[0]) || 'Sin broker';
+    else if(group === 'currency') key = isARS(a.type) ? 'ARS' : 'USD';
+    else key = a.ticker;
+    if(!buckets[key]) buckets[key] = {label:key, valueUSD:0, pnlUSD:0};
+    buckets[key].valueUSD += a.value;
+    if(a.pnl != null) buckets[key].pnlUSD += a.pnl;
+  });
+
+  const rows = Object.values(buckets).sort((x,y) => y.valueUSD - x.valueUSD);
+  const total = rows.reduce((s, r) => s + r.valueUSD, 0);
+
+  // Empty state
+  const tbody = el('pieBigTbody');
+  if(!rows.length || total <= 0){
+    el('pieBigEmpty').style.display = 'block';
+    tbody.innerHTML = '';
+    if(_pieBigChart){ _pieBigChart.destroy(); _pieBigChart = null; }
+    el('pieBigTotal').textContent = '';
+    return;
+  }
+  el('pieBigEmpty').style.display = 'none';
+
+  // Pintar tabla
+  const fmtVal = v => (cur === 'ARS') ? `$${n2(v * c, 0)}` : `$${n2(v, 2)}`;
+  tbody.innerHTML = rows.map((r, i) => {
+    const pct = total > 0 ? (r.valueUSD / total * 100) : 0;
+    const col = COLS[i % COLS.length];
+    const pnlClass = r.pnlUSD >= 0 ? 'up' : 'dn';
+    const pnlStr = (r.pnlUSD >= 0 ? '+' : '') + fmtVal(r.pnlUSD);
+    return `<tr style="border-bottom:1px solid var(--blueL)">
+      <td style="padding:6px 8px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${col};margin-right:6px;vertical-align:middle"></span>${r.label}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">${n2(pct, 2)}%</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:600">${fmtVal(r.valueUSD)}</td>
+      <td class="${pnlClass}" style="padding:6px 8px;text-align:right;font-family:monospace">${pnlStr}</td>
+    </tr>`;
+  }).join('');
+
+  // Total footer
+  const totalPnl = rows.reduce((s, r) => s + r.pnlUSD, 0);
+  el('pieBigTotal').innerHTML = `<strong>Total:</strong> ${fmtVal(total)} · <span class="${totalPnl >= 0 ? 'up' : 'dn'}">P&L ${totalPnl >= 0 ? '+' : ''}${fmtVal(totalPnl)}</span>`;
+
+  // Pintar gráfico
+  if(_pieBigChart) _pieBigChart.destroy();
+  const canvas = el('pieBigCanvas');
+  _pieBigChart = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: rows.map(r => r.label),
+      datasets: [{
+        data: rows.map(r => r.valueUSD),
+        backgroundColor: rows.map((_, i) => COLS[i % COLS.length]),
+        borderWidth: 2,
+        borderColor: document.body.classList.contains('dark') ? '#0d1520' : '#f5f7fa',
+      }]
+    },
+    options: {
+      responsive: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (item) => {
+              const v = item.parsed;
+              const pct = total > 0 ? (v / total * 100) : 0;
+              return `${item.label}: ${fmtVal(v)} (${n2(pct, 2)}%)`;
+            }
+          }
+        }
+      }
+    }
   });
 }
 // ═══════════════════════════════════════════════════════════════════════════
