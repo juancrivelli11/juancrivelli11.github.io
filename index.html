@@ -701,14 +701,36 @@ const SUPA_URL = 'https://ypplfrqwspgdjwboikdz.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlwcGxmcnF3c3BnZGp3Ym9pa2R6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MzUzOTQsImV4cCI6MjA5NDExMTM5NH0.2ixCpb8i8ZIexCCM-RJwH-rvV3fOwaMasN6V1Fx-bKw';
 const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
 const COLS = ['#1565c0','#42a5f5','#00a876','#f59f00','#e53935','#7c3aed','#0891b2','#f97316','#14b8a6','#8b5cf6'];
-const ARS_BROKERS = ['Bull Market','IOL Argentina','Galicia','Santander','Balanz','PPI'];
-function isARSBroker(name){ return ARS_BROKERS.some(b=>b.toLowerCase()===name?.toLowerCase()); }
+// Brokers que vienen por DEFAULT en pesos. El usuario puede cambiarlo por broker
+// desde el botón en la vista de detalle (preferencia guardada en localStorage).
+const ARS_BROKERS_DEFAULT = ['Bull Market','IOL Argentina','IOL Crypto','IOL Cripto','Galicia','Santander','Balanz','PPI'];
+function getBrokerCurrency(name){
+  if(!name) return 'USD';
+  // Preferencia del usuario tiene prioridad
+  const pref = brokerCurrencyPrefs[name];
+  if(pref === 'USD' || pref === 'ARS') return pref;
+  // Fallback al default hardcoded
+  return ARS_BROKERS_DEFAULT.some(b => b.toLowerCase() === name.toLowerCase()) ? 'ARS' : 'USD';
+}
+function setBrokerCurrency(name, cur){
+  if(!name) return;
+  if(cur !== 'USD' && cur !== 'ARS') return;
+  brokerCurrencyPrefs[name] = cur;
+  save();
+  // Re-render la vista actual
+  if(_currentBrokerView === name) showBrokerDetail(name);
+  else render();
+}
+function isARSBroker(name){ return getBrokerCurrency(name) === 'ARS'; }
 const BROKER_LOGOS = {
   'IOL Dólares':   'invertironline.com',
   'IOL Argentina': 'invertironline.com',
+  'IOL Crypto':    'invertironline.com',
+  'IOL Cripto':    'invertironline.com',
   'Bull Market':   'bullmarket.com.ar',
   'Galicia':       'galicia.ar',
   'Binance':       'binance.com',
+  'Nexo':          'nexo.com',
   'Santander':     'santander.com.ar',
   'Interactive Brokers': 'interactivebrokers.com',
   'Balanz':        'balanz.com',
@@ -788,6 +810,9 @@ const TICKERS = {
 let orders    = JSON.parse(localStorage.getItem('pf6_orders')  || '[]');
 let snapshots = JSON.parse(localStorage.getItem('pf6_snaps')   || '[]');
 let brokers   = JSON.parse(localStorage.getItem('pf6_brokers') || JSON.stringify(DEFAULT_BROKERS));
+// Preferencia de moneda por broker: { "Binance": "USD", "IOL Crypto": "ARS", ... }
+// Si no hay preferencia guardada, se usa el default basado en ARS_BROKERS.
+let brokerCurrencyPrefs = JSON.parse(localStorage.getItem('pf6_broker_currency') || '{}');
 let prices    = JSON.parse(localStorage.getItem('pf6_prices')||'{}');
 let mkt       = {};
 let currency  = 'USD';
@@ -803,6 +828,7 @@ function localSave(){
   localStorage.setItem('pf6_orders',   JSON.stringify(orders));
   localStorage.setItem('pf6_snaps',    JSON.stringify(snapshots));
   localStorage.setItem('pf6_brokers',  JSON.stringify(brokers));
+  localStorage.setItem('pf6_broker_currency', JSON.stringify(brokerCurrencyPrefs));
 }
 async function save(){
   localSave();
@@ -1624,6 +1650,9 @@ function renderBrokerGrid(){
   sel.innerHTML='<option value="">— Seleccionar —</option>';
   brokers.forEach(b=>{
     const count=orders.filter(o=>o.broker===b).length;
+    const cur = getBrokerCurrency(b);
+    const altCur = cur === 'ARS' ? 'USD' : 'ARS';
+    const curColor = cur === 'ARS' ? 'var(--gold)' : 'var(--green)';
     const card=document.createElement('div');card.className='broker-card';
     card.innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:start">
@@ -1632,7 +1661,12 @@ function renderBrokerGrid(){
           style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1;padding:0 0 0 6px"
           title="Eliminar broker">✕</button>
       </div>
-      <span>${count} operaciones</span>`;
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:4px">
+        <span>${count} operaciones</span>
+        <button onclick="event.stopPropagation();setBrokerCurrency('${b.replace(/'/g,"\\'")}','${altCur}')"
+          style="background:none;border:1px solid ${curColor};cursor:pointer;color:${curColor};font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600"
+          title="Cambiar a ${altCur}">${cur}</button>
+      </div>`;
     card.onclick=()=>showBrokerDetail(b);
     grid.appendChild(card);
     sel.innerHTML+=`<option value="${b}">${b}</option>`;
@@ -1643,7 +1677,10 @@ function showBrokerDetail(name){
   el('brokerGridView').style.display='none';
   el('brokerDetailView').style.display='block';
   const bLogo=getBrokerLogo(name);
-  el('brokerDetailTitle').innerHTML=(bLogo?`<img src="${bLogo}" style="width:16px;height:16px;border-radius:3px;vertical-align:middle;margin-right:5px" onerror="this.style.display='none'">`:'')+name.toUpperCase();
+  const curBroker = getBrokerCurrency(name);
+  const altCur = curBroker === 'ARS' ? 'USD' : 'ARS';
+  const toggleBtn = `<button class="btn btn-ghost" style="margin-left:12px;padding:4px 10px;font-size:11px;vertical-align:middle" title="Cambiar moneda de visualización" onclick="setBrokerCurrency('${name.replace(/'/g,"\\'")}','${altCur}')">💱 Ver en ${altCur}</button><span style="font-size:11px;color:var(--muted);margin-left:6px;vertical-align:middle">(mostrando en ${curBroker})</span>`;
+  el('brokerDetailTitle').innerHTML=(bLogo?`<img src="${bLogo}" style="width:16px;height:16px;border-radius:3px;vertical-align:middle;margin-right:5px" onerror="this.style.display='none'">`:'')+name.toUpperCase()+toggleBtn;
   const pf=enrich(getPortfolio(name));
   const c=ccl();
   // Use cost as fallback when price not available
