@@ -362,6 +362,7 @@ body.dark #auth-welcome h2{color:#90caf9}
     <button class="tab" onclick="goTab('orders',this)">Órdenes</button>
     <button class="tab" onclick="goTab('brokers',this)">Brokers</button>
     <button class="tab" onclick="goTab('charts',this)">Gráficas</button>
+    <button class="tab" onclick="goTab('dividends',this)">💰 Dividendos</button>
   </div>
 </div>
 <!-- BODY -->
@@ -450,6 +451,56 @@ body.dark #auth-welcome h2{color:#90caf9}
             <canvas id="arsUsdChart" width="150" height="150" style="flex-shrink:0"></canvas>
             <div id="arsUsdLegend" class="pie-legend"></div>
           </div>
+        </div>
+      </div>
+    </div>
+    <!-- DIVIDENDS -->
+    <div class="page" id="page-dividends">
+      <div class="sec-hdr">
+        <span class="sec-title">💰 DIVIDENDOS COBRADOS</span>
+        <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="scanDividendsNow()">↻ Buscar dividendos ahora</button>
+      </div>
+      <!-- KPIs -->
+      <div class="kpi-row" id="divKpiRow" style="margin-bottom:14px"></div>
+      <!-- Totales por activo -->
+      <div class="chart-box">
+        <h3>Total por activo</h3>
+        <div style="overflow-x:auto">
+          <table id="divByAssetTable" style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:2px solid var(--blueL);text-align:left">
+                <th style="padding:8px">Activo</th>
+                <th style="padding:8px;text-align:right">Pagos</th>
+                <th style="padding:8px;text-align:right">Total bruto (USD)</th>
+                <th style="padding:8px;text-align:right">Total retenido</th>
+                <th style="padding:8px;text-align:right">Total neto (USD)</th>
+                <th style="padding:8px;text-align:right">Último cobro</th>
+              </tr>
+            </thead>
+            <tbody id="divByAssetTbody"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Histórico cronológico -->
+      <div class="chart-box" style="margin-top:14px">
+        <h3>Histórico cronológico</h3>
+        <div style="overflow-x:auto">
+          <table id="divHistTable" style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:2px solid var(--blueL);text-align:left">
+                <th style="padding:8px">Fecha</th>
+                <th style="padding:8px">Activo</th>
+                <th style="padding:8px">Broker</th>
+                <th style="padding:8px;text-align:right">Cant.</th>
+                <th style="padding:8px;text-align:right">$/acción</th>
+                <th style="padding:8px;text-align:right">Bruto</th>
+                <th style="padding:8px;text-align:right">Ret. %</th>
+                <th style="padding:8px;text-align:right">Neto</th>
+                <th style="padding:8px"></th>
+              </tr>
+            </thead>
+            <tbody id="divHistTbody"></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1063,6 +1114,30 @@ function makeLogo(ticker, type, size=26){
 // PORTFOLIO CALC
 // ═══════════════════════════════════════════════════════════════════════════
 const CASH_LIST = ['USD','ARS','USDT','USDC','DAI','BUSD','PESOS','CASH'];
+
+// Withholding tax sobre dividendos. Depende del TIPO de activo Y del broker
+// porque la fiscalidad cambia: un CEDEAR en IOL Argentina retiene 15% (convenio AR-USA),
+// mientras que la misma acción USA comprada en IB retiene 30% (US non-resident).
+// Función getDividendTaxRate(type, broker) → fracción (0.15 = 15%).
+function getDividendTaxRate(type, broker){
+  const t = (type||'').toLowerCase();
+  const brokerCur = getBrokerCurrency(broker);
+  // Cripto: no hay dividendos formales
+  if(t.includes('cripto')) return 0;
+  // Acción Argentina: 7% impuesto a las ganancias residentes
+  if(t.includes('argentina')) return 0.07;
+  // Bonos: usualmente sin retención sobre cupones (residentes)
+  if(t.includes('bono')) return 0;
+  // CEDEAR (típicamente broker ARS): 15% convenio AR-USA
+  if(t.includes('cedear')) return 0.15;
+  // Acción USA / ETF: depende del broker
+  //   - Broker ARS (algún CEDEAR con dividendo cobrado vía banco AR): 15%
+  //   - Broker USD (IB, IOL Dólares, etc.): 30% (US non-resident withholding)
+  if(t.includes('usa') || t.includes('etf')){
+    return brokerCur === 'ARS' ? 0.15 : 0.30;
+  }
+  return 0;
+}
 function isCash(ticker){ return CASH_LIST.includes((ticker||'').toUpperCase()); }
 function getPortfolio(broker=null){
   const map={};
@@ -1091,6 +1166,106 @@ function getPortfolio(broker=null){
     avgPrice:     a.qty>0 ? a.cost/a.qty     : 0,   // USD
     avgPriceOrig: a.qty>0 ? a.costOrig/a.qty : 0,   // moneda original (ARS para CEDEAR/arg/bono)
   }));
+}
+
+// Cantidad poseída de un ticker (en un broker, opcional) a una fecha dada.
+// Útil para calcular dividendos retroactivos: sólo cobrás divs si tenías el activo.
+function qtyAtDate(ticker, broker, date){
+  let qty = 0;
+  const sorted = orders
+    .filter(o => o.ticker === ticker && (!broker || (o.broker||'').toLowerCase() === broker.toLowerCase()) && !o.dividend && !o.expense)
+    .sort((a,b) => (a.date||'').localeCompare(b.date||''));
+  for(const o of sorted){
+    if((o.date||'') > date) break;
+    if(o.action === 'Compra') qty += o.qty;
+    else qty -= o.qty;
+  }
+  return qty;
+}
+
+// Auto-detect de dividendos: para cada activo con tenencia, fetchea histórico
+// de dividendos de Yahoo y registra los no procesados como una "Compra" de
+// liquidez (USD o ARS según el broker) por el monto NETO después de impuestos.
+// Cada orden de dividendo lleva flag dividend:true y un divId único para evitar duplicados.
+async function detectAndRegisterDividends(){
+  const pf = getPortfolio();
+  // Activos elegibles: no cash, no cripto
+  const eligible = pf.filter(a => !isCash(a.ticker) && a.type !== 'Cripto');
+  if(!eligible.length) return { added: 0, scanned: 0 };
+  setStatus(`Detectando dividendos (0/${eligible.length})...`, true);
+  let added = 0, scanned = 0;
+  // Paralelizar con límite
+  const CONC = 4;
+  let cursor = 0;
+  await Promise.all(Array(CONC).fill(0).map(async () => {
+    while(true){
+      const idx = cursor++;
+      if(idx >= eligible.length) break;
+      const a = eligible[idx];
+      try{
+        const symbol = yahooSymbolFor(a.ticker, a.type);
+        const divs = await fetchDividends(symbol, 5);
+        if(divs && divs.length){
+          // Brokers donde tiene este ticker
+          const brokerList = [...new Set(orders
+            .filter(o => o.ticker === a.ticker && o.broker && !o.dividend && !o.expense)
+            .map(o => o.broker))];
+          for(const brk of brokerList){
+            for(const div of divs){
+              const divId = `div_${a.ticker}_${div.date}_${brk}`;
+              if(orders.some(o => o.divId === divId)) continue;
+              // Cantidad poseída al momento del dividendo
+              const qtyHeld = qtyAtDate(a.ticker, brk, div.date);
+              if(qtyHeld <= 0) continue;
+              // Cálculos
+              const grossUSD = qtyHeld * div.amount;
+              const taxRate  = getDividendTaxRate(a.type, brk);
+              const netUSD   = grossUSD * (1 - taxRate);
+              const brokerCur= getBrokerCurrency(brk);
+              const cclAtDiv = ccl(); // simplificación: usamos CCL actual
+              const liqTicker = brokerCur === 'ARS' ? 'ARS' : 'USD';
+              const orderQty  = brokerCur === 'ARS' ? netUSD * cclAtDiv : netUSD;
+              orders.push({
+                id: Date.now() + Math.floor(Math.random()*100000),
+                divId,
+                ticker: liqTicker,
+                type: liqTicker === 'ARS' ? 'Acción Argentina' : 'Acción USA',
+                action: 'Compra',
+                qty: orderQty,
+                price: brokerCur === 'ARS' ? 1/cclAtDiv : 1,
+                priceOrig: brokerCur === 'ARS' ? 1 : 1,
+                currency: brokerCur,
+                cclAtOrder: brokerCur === 'ARS' ? cclAtDiv : null,
+                comm: 0,
+                broker: brk,
+                date: div.date,
+                notes: `💰 Dividendo ${a.ticker}: ${qtyHeld.toFixed(4)} × $${n2(div.amount,4)} = bruto $${n2(grossUSD,2)} USD · ret. ${n2(taxRate*100,0)}% = neto $${n2(netUSD,2)} USD`,
+                dividend: true,
+                dividendTicker: a.ticker,
+                dividendAssetType: a.type,
+                dividendQtyHeld: qtyHeld,
+                dividendPerShare: div.amount,
+                dividendGrossUSD: grossUSD,
+                dividendTaxRate: taxRate,
+                dividendNetUSD: netUSD,
+                dividendCurrency: brokerCur,
+              });
+              added++;
+            }
+          }
+        }
+      } catch(e){ console.warn('Div detect error', a.ticker, e); }
+      scanned++;
+      if(scanned % 3 === 0 || scanned === eligible.length){
+        setStatus(`Detectando dividendos (${scanned}/${eligible.length})...`, true);
+      }
+    }
+  }));
+  if(added > 0){
+    await save();
+    setStatus(`✓ ${added} dividendo${added!==1?'s':''} nuevo${added!==1?'s':''} registrado${added!==1?'s':''}`, false);
+  }
+  return { added, scanned };
 }
 function enrich(pf){
   const c=ccl();
@@ -1333,6 +1508,20 @@ async function doRefresh(force=false){
   try{const r=await fetch('https://dolarapi.com/v1/dolares/blue');const d=await r.json();if(d.venta>100)mkt.dblue={price:d.venta,buy:d.compra};}catch(e){}
   try{const r=await fetch('https://dolarapi.com/v1/dolares/bolsa');const d=await r.json();if(d.venta>100)mkt.dmep={price:d.venta,buy:d.compra};}catch(e){}
   try{const r=await fetch('https://dolarapi.com/v1/dolares/contadoconliqui');const d=await r.json();if(d.venta>100)mkt.dccl={price:d.venta,buy:d.compra};}catch(e){}
+  // Auto-detect de dividendos (no bloqueante respecto al render).
+  // Sólo cuando es un refresh forzado o cuando hace > 24hs del último scan.
+  const lastDivScan = parseInt(localStorage.getItem('pf6_lastDivScan')||'0');
+  const divAge = Date.now() - lastDivScan;
+  if(force || divAge > 24*60*60*1000){
+    try{
+      const result = await detectAndRegisterDividends();
+      if(result.added > 0){
+        // Notificar al usuario en pantalla
+        console.log(`✓ ${result.added} dividendos detectados`);
+      }
+    } catch(e){ console.warn('Div scan failed', e); }
+    localStorage.setItem('pf6_lastDivScan', Date.now().toString());
+  }
   // Snapshot
   const today=new Date().toISOString().slice(0,10);
   const c=ccl();
@@ -1396,6 +1585,7 @@ function render(){
   renderTable(pfInv, 'assetTable', totUSD_usd+totARS_usd, pnlGlobal);
   renderOrders();
   renderBrokerGrid();
+  renderDividends();
   renderMainCharts(pf, totGlobal, totARS_usd, totUSD_usd, c);
   renderSidebarPie(pfInv, 'Portfolio', totGlobal);
   // Liquidity summary
@@ -1598,6 +1788,118 @@ function refreshFilterBrokerDropdown(){
   sel.innerHTML = '<option value="">Todos los brokers</option>';
   brokers.forEach(b => sel.innerHTML += `<option value="${b}" ${b===current?'selected':''}>${b}</option>`);
 }
+// ═══════════════════════════════════════════════════════════════════════════
+// DIVIDENDS PAGE
+// ═══════════════════════════════════════════════════════════════════════════
+function getDividendOrders(){
+  return orders.filter(o => o.dividend === true);
+}
+
+function renderDividends(){
+  const divs = getDividendOrders();
+  // KPIs
+  const kpiRow = el('divKpiRow');
+  if(!kpiRow) return;
+  const totalGross = divs.reduce((s,o)=>s+(o.dividendGrossUSD||0),0);
+  const totalNet   = divs.reduce((s,o)=>s+(o.dividendNetUSD||0),0);
+  const totalTax   = totalGross - totalNet;
+  const ytdGross   = divs.filter(o=>(o.date||'').slice(0,4)===new Date().getFullYear().toString())
+                          .reduce((s,o)=>s+(o.dividendGrossUSD||0),0);
+  const ytdNet     = divs.filter(o=>(o.date||'').slice(0,4)===new Date().getFullYear().toString())
+                          .reduce((s,o)=>s+(o.dividendNetUSD||0),0);
+  const c = ccl();
+  kpiRow.innerHTML = `
+    <div class="kpi-card"><label>Total bruto</label><div class="val" style="color:var(--blue)">${$u(totalGross)}</div><div style="font-size:10px;color:var(--muted)">${$a(totalGross*c)}</div></div>
+    <div class="kpi-card"><label>Total retenido</label><div class="val" style="color:var(--red)">${$u(totalTax)}</div><div style="font-size:10px;color:var(--muted)">impuestos</div></div>
+    <div class="kpi-card"><label>Total neto</label><div class="val" style="color:var(--green)">${$u(totalNet)}</div><div style="font-size:10px;color:var(--muted)">${$a(totalNet*c)}</div></div>
+    <div class="kpi-card"><label>YTD bruto</label><div class="val" style="color:var(--blue)">${$u(ytdGross)}</div><div style="font-size:10px;color:var(--muted)">año en curso</div></div>
+    <div class="kpi-card"><label>YTD neto</label><div class="val" style="color:var(--green)">${$u(ytdNet)}</div><div style="font-size:10px;color:var(--muted)">año en curso</div></div>
+    <div class="kpi-card"><label>Pagos totales</label><div class="val">${divs.length}</div><div style="font-size:10px;color:var(--muted)">eventos</div></div>
+  `;
+  // Por activo
+  const byAsset = {};
+  divs.forEach(o => {
+    const t = o.dividendTicker || o.ticker;
+    if(!byAsset[t]) byAsset[t] = { ticker:t, count:0, gross:0, tax:0, net:0, lastDate:'' };
+    byAsset[t].count++;
+    byAsset[t].gross += (o.dividendGrossUSD||0);
+    byAsset[t].net   += (o.dividendNetUSD||0);
+    byAsset[t].tax   += (o.dividendGrossUSD||0) - (o.dividendNetUSD||0);
+    if((o.date||'') > byAsset[t].lastDate) byAsset[t].lastDate = o.date||'';
+  });
+  const byAssetArr = Object.values(byAsset).sort((a,b)=>b.net - a.net);
+  const byAssetTbody = el('divByAssetTbody');
+  if(!byAssetArr.length){
+    byAssetTbody.innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--muted)">Sin dividendos registrados todavía. Apretá "↻ Buscar dividendos ahora" arriba para escanear.</td></tr>';
+  } else {
+    byAssetTbody.innerHTML = byAssetArr.map(r => `<tr style="border-bottom:1px solid var(--blueL)">
+      <td style="padding:6px 8px;font-weight:600;color:var(--blue);cursor:pointer" onclick="openFundamentals('${r.ticker}','')">${r.ticker}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">${r.count}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">${$u(r.gross)}</td>
+      <td class="dn" style="padding:6px 8px;text-align:right;font-family:monospace">-${$u(r.tax)}</td>
+      <td class="up" style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700">${$u(r.net)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:var(--muted)">${r.lastDate||'—'}</td>
+    </tr>`).join('') + `<tr style="border-top:2px solid var(--blue);font-weight:700;background:var(--blueLL)">
+      <td style="padding:8px">TOTAL</td>
+      <td style="padding:8px;text-align:right;font-family:monospace">${divs.length}</td>
+      <td style="padding:8px;text-align:right;font-family:monospace">${$u(totalGross)}</td>
+      <td class="dn" style="padding:8px;text-align:right;font-family:monospace">-${$u(totalTax)}</td>
+      <td class="up" style="padding:8px;text-align:right;font-family:monospace">${$u(totalNet)}</td>
+      <td></td>
+    </tr>`;
+  }
+  // Histórico cronológico
+  const sorted = [...divs].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const histTbody = el('divHistTbody');
+  if(!sorted.length){
+    histTbody.innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--muted)">Sin dividendos.</td></tr>';
+  } else {
+    histTbody.innerHTML = sorted.map(o => {
+      const grossARS = o.dividendCurrency === 'ARS' ? o.dividendGrossUSD * (o.cclAtOrder||c) : null;
+      const netARS   = o.dividendCurrency === 'ARS' ? o.dividendNetUSD   * (o.cclAtOrder||c) : null;
+      return `<tr style="border-bottom:1px solid var(--blueL)">
+        <td style="padding:6px 8px;font-family:monospace">${o.date||'—'}</td>
+        <td style="padding:6px 8px;font-weight:600;color:var(--blue);cursor:pointer" onclick="openFundamentals('${o.dividendTicker||o.ticker}','${o.dividendAssetType||''}')">${o.dividendTicker||o.ticker}</td>
+        <td style="padding:6px 8px;font-size:11px">${o.broker||'—'}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtQty(o.dividendQtyHeld||0,o.dividendAssetType||'')}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:monospace">$${n2(o.dividendPerShare||0,4)}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:monospace">${$u(o.dividendGrossUSD||0)}</td>
+        <td class="dn" style="padding:6px 8px;text-align:right;font-family:monospace">${n2((o.dividendTaxRate||0)*100,0)}%</td>
+        <td class="up" style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700">${$u(o.dividendNetUSD||0)}${netARS?`<div style='font-size:9px;color:var(--muted);font-weight:400'>${$a(netARS)}</div>`:''}</td>
+        <td style="padding:6px 8px;text-align:right">
+          <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px" onclick="deleteDividend(${o.id})" title="Eliminar este dividendo">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+function deleteDividend(id){
+  if(!confirm('¿Eliminar este dividendo? La liquidez asociada también se borrará.')) return;
+  orders = orders.filter(o => o.id !== id);
+  save();
+  render();
+  renderDividends();
+}
+
+async function scanDividendsNow(){
+  setStatus('Escaneando dividendos...', true);
+  try{
+    const result = await detectAndRegisterDividends();
+    if(result.added > 0){
+      alert(`✓ ${result.added} dividendo${result.added!==1?'s':''} nuevo${result.added!==1?'s':''} registrado${result.added!==1?'s':''}.`);
+      render();
+      renderDividends();
+    } else {
+      alert('No se encontraron dividendos nuevos para registrar.');
+    }
+    localStorage.setItem('pf6_lastDivScan', Date.now().toString());
+  } catch(e){
+    alert('Error escaneando dividendos: ' + e.message);
+  }
+  setStatus('', false);
+}
+
 function renderOrders(){
   refreshFilterBrokerDropdown();
   const el2=el('orderList');
@@ -1625,7 +1927,7 @@ function renderOrders(){
     const div=document.createElement('div');
     div.className=`ord-card ${o.action==='Compra'?'buy':'sell'}`;
     const total=o.qty*o.price+(o.comm||0);
-    const lbl = o.expense ? '💸 Gasto' : o.action;
+    const lbl = o.expense ? '💸 Gasto' : (o.dividend ? `💰 Div ${o.dividendTicker||''}` : o.action);
     div.innerHTML=`<div class="ord-row">
       <div class="ord-left">
         <span class="ord-badge ${o.action==='Compra'?'buy':'sell'}">${lbl}</span>
@@ -2136,6 +2438,32 @@ async function fetchFundamentals(symbol, type){
 }
 
 // Históricos — Yahoo chart 1Y (precio diario)
+// Dividendos — Yahoo chart endpoint con events=div
+// Retorna array de { date: 'YYYY-MM-DD', amount: number, ts: unix }
+async function fetchDividends(symbol, rangeYears=5){
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${rangeYears}y&interval=1d&events=div`;
+  const proxies = [
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  ];
+  for(const proxy of proxies){
+    try{
+      const r = await fetch(proxy(url));
+      if(!r.ok) continue;
+      const d = await r.json();
+      const divs = d?.chart?.result?.[0]?.events?.dividends;
+      if(!divs) return [];
+      const out = Object.values(divs).map(x => ({
+        date: new Date((x.date||0)*1000).toISOString().slice(0,10),
+        amount: x.amount,
+        ts: x.date,
+      })).sort((a,b) => a.ts - b.ts);
+      return out;
+    } catch(e){}
+  }
+  return null;
+}
+
 async function fetchPriceHistory1Y(symbol){
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1y&interval=1d`;
   const proxies = [
@@ -2862,6 +3190,7 @@ function goTab(name,btn){
   el('page-'+name).classList.add('active');btn.classList.add('active');
   if(name==='brokers') hideBrokerDetail();
   if(name==='charts') renderMainCharts(enrich(getPortfolio()),0,0,0,ccl());
+  if(name==='dividends') renderDividends();
 }
 function openOverlay(name){el('overlay-'+name).classList.add('open');}
 function closeOverlay(name){el('overlay-'+name).classList.remove('open');}
