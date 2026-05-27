@@ -2680,8 +2680,12 @@ function saveOrder(){
     expense: isGasto ? true : undefined,
   });
   // Auto-adjust USD/USDT liquidity for non-ARS brokers
-  // NO aplicar para Gastos/Retiros (la orden ya es la salida directa de liquidez).
-  if(!isGasto && !isA && broker && !isARSBroker(broker)){
+  // NO aplicar:
+  //  - para Gastos/Retiros (la orden ya es la salida directa de liquidez)
+  //  - cuando el ticker COMPRADO/VENDIDO es la liquidez en sí (USD/USDT/USDC/etc.)
+  //    porque si no se duplica la operación y deja saldo neto en 0.
+  //  - cuando el mercado elegido es "Liquidez" (registrás cash directamente).
+  if(!isGasto && !isA && broker && !isARSBroker(broker) && !isCash(ticker) && mktVal !== 'liquidez'){
     const totalUSD = qty * priceUSD + commUSD;
     // Check for USD or USDT liquidity in this broker
     const stableTickers = ['USD','USDT','USDC'];
