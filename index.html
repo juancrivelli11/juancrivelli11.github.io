@@ -3476,15 +3476,14 @@ function toggleBrokersDropdown(ev){
   const dd = el('brokersDropdown');
   if(!dd) return;
   if(dd.style.display === 'block'){ dd.style.display='none'; return; }
-  // Rellenar con la lista de brokers, ordenados por valor descendente
-  const pfFull = enrich(getPortfolio());
+  // Rellenar con la lista de brokers, ordenados por valor descendente.
+  // Calculamos el valor PER broker usando getPortfolio(broker) para que cada
+  // tenencia se cuente en el broker real (no se reparta entre todos los brokers).
   const brokerVals = {};
-  brokers.forEach(b => { brokerVals[b] = 0; });
-  pfFull.forEach(a => {
-    a.brkList?.forEach(b => {
-      // Distribuir valor del activo entre sus brokers (asume distribución equitativa si hay varios)
-      if(brokerVals[b] != null) brokerVals[b] += (a.value||0) / a.brkList.length;
-    });
+  brokers.forEach(b => {
+    const pfB = enrich(getPortfolio(b));
+    // Total = suma de valor (o costo si no hay precio) de todos los activos en ese broker
+    brokerVals[b] = pfB.reduce((s, a) => s + (a.hasPx ? a.value : a.cost), 0);
   });
   const sortedBrokers = [...brokers].sort((a,b) => (brokerVals[b]||0) - (brokerVals[a]||0));
   const c = ccl();
