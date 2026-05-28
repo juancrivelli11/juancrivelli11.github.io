@@ -1180,8 +1180,24 @@ function getDividendTaxRate(type, broker){
 function isCash(ticker){ return CASH_LIST.includes((ticker||'').toUpperCase()); }
 function getPortfolio(broker=null){
   const map={};
-  const ords = broker ? orders.filter(o=>(o.broker||'').toLowerCase().trim()===(broker||'').toLowerCase().trim()) : orders;
-  if(broker) console.log(`getPortfolio(${broker}): ${ords.length} orders`, ords.map(o=>`${o.action} ${o.ticker} qty=${o.qty} broker="${o.broker}"`));
+  // CRÍTICO: ordenar las órdenes cronológicamente por fecha antes de procesar.
+  // El cálculo del PPC y del costo es path-dependent: si una Venta aparece antes
+  // de la Compra que generó el stock, el resultado queda distorsionado.
+  // Como tiebreaker para mismo día usamos el id (Date.now de creación) o el orden
+  // original del array — preserva el orden estable de inserción.
+  let ords = broker ? orders.filter(o=>(o.broker||'').toLowerCase().trim()===(broker||'').toLowerCase().trim()) : orders;
+  ords = [...ords].sort((a,b) => {
+    const da = a.date || '';
+    const db = b.date || '';
+    if(da !== db) return da.localeCompare(db);
+    // Mismo día: Compras antes que Ventas (evita el caso de vender lo que recién compraste)
+    if(a.action !== b.action){
+      if(a.action === 'Compra') return -1;
+      if(b.action === 'Compra') return 1;
+    }
+    return (a.id||0) - (b.id||0);
+  });
+  if(broker) console.log(`getPortfolio(${broker}): ${ords.length} orders (sorted)`, ords.map(o=>`${o.date} ${o.action} ${o.ticker} qty=${o.qty}`));
   ords.forEach(o=>{
     if(!map[o.ticker]) map[o.ticker]={ticker:o.ticker,type:o.type||'Acción USA',qty:0,cost:0,costOrig:0,comm:0};
     const m=map[o.ticker];
