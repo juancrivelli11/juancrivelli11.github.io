@@ -2169,13 +2169,13 @@ function showBrokerDetail(name){
   if(_brokerArs) _brokerArs.destroy();
   _brokerArs=new Chart(arsC,{type:'doughnut',data:{labels:['ARS','USD'],datasets:[{data:[arsVal,usdVal],backgroundColor:['#f59f00','#1565c0'],borderWidth:2,borderColor:'#f5f7fa'}]},options:{responsive:false,plugins:{legend:{display:false}}}});
   grid.appendChild(arsBox);
-  // Bar rendimiento
+  // Bar rendimiento — Excluir liquidez (ARS/USD/USDT etc. no tienen rendimiento real,
+  // siempre dan 0% y ensucian la gráfica).
   const barBox=document.createElement('div');barBox.className='chart-box chart-full';
   barBox.innerHTML='<h3>Rendimiento % por activo</h3>';
   const barC=document.createElement('canvas');barC.height=100;
   barBox.appendChild(barC);grid.appendChild(barBox);
-  // For bar chart use pnlPct if available, else show 0
-  const pfPnl=pf.length>0?pf:[];
+  const pfPnl = pf.filter(a => !isCash(a.ticker) && a.pnlPct != null);
   if(_brokerBar) _brokerBar.destroy();
   if(pfPnl.length) _brokerBar=new Chart(barC,{
     type:'bar',
