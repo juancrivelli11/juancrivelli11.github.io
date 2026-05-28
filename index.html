@@ -1749,7 +1749,13 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
     // momento de cada compra). Para activos USD el avgPrice ya está en dólares.
     const ppcARS = (a.avgPriceOrig>0) ? a.avgPriceOrig : (a.avgPrice*c);
     const ppcStr=isARS(a.type)?$a(ppcARS):$u(a.avgPrice);
-    const totStr=a.hasPx?(isARS(a.type)?$a(a.value*c):$u(a.value)):'—';
+    // Si no hay precio (ej: ON sin cotización), usamos el COSTO como fallback
+    // para no mostrar '—'. Marcamos con (costo) para que se entienda que es estimado.
+    const totStr = a.hasPx
+      ? (isARS(a.type) ? $a(a.value*c) : $u(a.value))
+      : (a.cost > 0
+          ? (isARS(a.type) ? $a(a.cost*c) : $u(a.cost)) + ' <span style="font-size:9px;color:var(--muted)">(costo)</span>'
+          : '—');
     const tr=document.createElement('tr');
     // Asset cell
     const td=document.createElement('td');
@@ -2117,11 +2123,18 @@ function showBrokerDetail(name){
     const val = a.hasPx?a.value:a.cost;
     return s + (isARS(a.type) ? val*c3 : val*mep);
   },0);
-  const totValDisplay = isARSBroker(name) ? $a(totAllARS) : $u(totAllUSD);
+  const brokerIsARS = isARSBroker(name);
+  const totValDisplay  = brokerIsARS ? $a(totAllARS) : $u(totAllUSD);
+  // Costo y P&L también en la moneda del broker.
+  // Costo base ARS: para cada activo, costo*CCL si es ARS-type, o costo*MEP si es USD-type.
+  const costARS = pf.reduce((s,a) => s + (isARS(a.type) ? a.cost*c3 : a.cost*mep), 0);
+  const pnlARS  = pf.reduce((s,a) => s + (isARS(a.type) ? (a.pnl||0)*c3 : (a.pnl||0)*mep), 0);
+  const totCostDisplay = brokerIsARS ? $a(costARS) : $u(totCost);
+  const totPnLDisplay  = (totPnL>=0?'+':'') + (brokerIsARS ? $a(pnlARS) : $u(totPnL));
   [
     {l:'Valor Total',v:totValDisplay,c:roe>=0?'var(--blue)':'var(--txt)'},
-    {l:'Costo Base',v:$u(totCost),c:'var(--txt)'},
-    {l:'P&L',v:(totPnL>=0?'+':'')+$u(totPnL),c:totPnL>=0?'var(--green)':'var(--red)'},
+    {l:'Costo Base',v:totCostDisplay,c:'var(--txt)'},
+    {l:'P&L',v:totPnLDisplay,c:totPnL>=0?'var(--green)':'var(--red)'},
     {l:'ROE',v:(roe>=0?'+':'')+n2(roe,2)+'%',c:roe>=0?'var(--green)':'var(--red)'},
   ].forEach(k=>{
     const d=document.createElement('div');d.className='kpi-card';
