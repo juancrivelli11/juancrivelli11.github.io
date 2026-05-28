@@ -196,6 +196,14 @@ body.dark .order-filters input,body.dark .order-filters select{background:#11182
   padding:13px;margin-bottom:12px;box-shadow:0 1px 3px #1565c008}
 .chart-box h3{font-size:10px;color:var(--muted);text-transform:uppercase;
   letter-spacing:1px;font-weight:700;margin-bottom:10px}
+.rng-btn{background:none;border:1px solid var(--blueL);color:var(--muted);
+  font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-weight:600;
+  transition:all 0.15s}
+.rng-btn:hover{background:var(--blueLL);color:var(--blue)}
+.rng-btn.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+body.dark .rng-btn{color:#7a95c0;border-color:#1e2d45}
+body.dark .rng-btn:hover{background:#1e2d45;color:#90caf9}
+body.dark .rng-btn.active{background:#42a5f5;color:#070d18;border-color:#42a5f5}
 .pie-legend{flex:1;font-size:11px}
 .pie-row{display:flex;justify-content:space-between;margin-bottom:7px}
 .pie-dot{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:6px}
@@ -360,7 +368,10 @@ body.dark #auth-welcome h2{color:#90caf9}
   <div class="tabs">
     <button class="tab active" onclick="goTab('portfolio',this)">Portfolio</button>
     <button class="tab" onclick="goTab('orders',this)">Órdenes</button>
-    <button class="tab" onclick="goTab('brokers',this)">Brokers</button>
+    <div style="position:relative;display:inline-block">
+      <button class="tab" id="brokersTabBtn" onclick="toggleBrokersDropdown(event)">Brokers ▾</button>
+      <div id="brokersDropdown" style="display:none;position:absolute;top:100%;left:0;background:var(--card);border:1px solid var(--blueL);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.15);min-width:220px;z-index:200;max-height:400px;overflow-y:auto;margin-top:2px"></div>
+    </div>
     <button class="tab" onclick="goTab('charts',this)">Gráficas</button>
     <button class="tab" onclick="goTab('dividends',this)">💰 Dividendos</button>
   </div>
@@ -431,11 +442,35 @@ body.dark #auth-welcome h2{color:#90caf9}
     <!-- CHARTS -->
     <div class="page" id="page-charts">
       <div class="chart-box">
-        <h3>Evolución del portfolio (90 días)</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <h3 id="lineChartTitle" style="margin:0">Evolución del portfolio</h3>
+          <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
+            <button class="rng-btn" data-range="7d"  onclick="setChartRange('7d')">7D</button>
+            <button class="rng-btn" data-range="30d" onclick="setChartRange('30d')">30D</button>
+            <button class="rng-btn active" data-range="90d" onclick="setChartRange('90d')">90D</button>
+            <button class="rng-btn" data-range="1y"  onclick="setChartRange('1y')">1A</button>
+            <button class="rng-btn" data-range="all" onclick="setChartRange('all')">Todo</button>
+            <span style="color:var(--muted);font-size:10px;margin:0 4px">|</span>
+            <input type="date" id="chartRangeFrom" onchange="setChartRangeCustom()" style="padding:3px 6px;font-size:11px;border:1px solid var(--blueL);border-radius:4px;background:var(--card)">
+            <span style="color:var(--muted);font-size:10px">→</span>
+            <input type="date" id="chartRangeTo" onchange="setChartRangeCustom()" style="padding:3px 6px;font-size:11px;border:1px solid var(--blueL);border-radius:4px;background:var(--card)">
+          </div>
+        </div>
         <div id="noChart" style="text-align:center;padding:24px;color:var(--muted);font-size:12px">
           Actualizá precios cada día para ver la evolución.
         </div>
         <canvas id="lineChart" style="display:none" height="180"></canvas>
+      </div>
+      <div class="chart-box" style="margin-top:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+          <h3 style="margin:0">📊 Aportes de capital vs Valoración</h3>
+          <span style="font-size:11px;color:var(--muted)">Mismo rango temporal de arriba</span>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin:0 0 8px 0">Azul = capital neto aportado (depósitos − retiros). Verde encima = ganancia por valoración del mercado. La suma de ambas áreas = valor total de tu portfolio.</p>
+        <div id="noStackChart" style="text-align:center;padding:24px;color:var(--muted);font-size:12px">
+          Cargá tus aportes de capital (Compras de USD/ARS/USDT) para ver esta gráfica.
+        </div>
+        <canvas id="stackChart" style="display:none" height="180"></canvas>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="chart-box" style="cursor:pointer" title="Click para expandir" onclick="openPieModal({title:'Composición por activo',group:'ticker'})">
@@ -2216,19 +2251,159 @@ function deleteBroker(name){
   save();
   renderBrokerGrid();
 }
+// Estado del rango temporal de los charts (persistido)
+let chartRange = localStorage.getItem('pf6_chartRange') || '90d';
+let _stackChart = null;
+
+function setChartRange(range){
+  chartRange = range;
+  localStorage.setItem('pf6_chartRange', range);
+  // Limpiar inputs de custom
+  if(el('chartRangeFrom')) el('chartRangeFrom').value = '';
+  if(el('chartRangeTo'))   el('chartRangeTo').value   = '';
+  // Actualizar visual de botones
+  document.querySelectorAll('.rng-btn').forEach(b => b.classList.toggle('active', b.dataset.range === range));
+  renderMainCharts(enrich(getPortfolio()), 0, 0, 0, ccl());
+}
+
+function setChartRangeCustom(){
+  const from = el('chartRangeFrom')?.value;
+  const to   = el('chartRangeTo')?.value;
+  if(!from && !to) return;
+  chartRange = 'custom';
+  document.querySelectorAll('.rng-btn').forEach(b => b.classList.remove('active'));
+  renderMainCharts(enrich(getPortfolio()), 0, 0, 0, ccl());
+}
+
+function getSnapshotsInRange(){
+  if(!snapshots.length) return [];
+  if(chartRange === 'custom'){
+    const from = el('chartRangeFrom')?.value || '';
+    const to   = el('chartRangeTo')?.value   || '';
+    return snapshots.filter(s => (!from || s.date >= from) && (!to || s.date <= to));
+  }
+  const daysMap = {'7d':7,'30d':30,'90d':90,'1y':365,'all':10000};
+  const days = daysMap[chartRange] || 90;
+  return snapshots.slice(-days);
+}
+
+// Capital neto aportado hasta una fecha (inclusive).
+// Cuenta: Compras de cash NO auto, NO dividend, NO expense, menos Ventas (incluye expenses)
+// del mismo tipo. Resultado en USD.
+function getNetCapitalAt(dateStr){
+  let total = 0;
+  orders.forEach(o => {
+    if(!isCash(o.ticker)) return;
+    if(o.dividend || o.auto) return; // ganancias o internos, no aportes
+    if((o.date||'') > dateStr) return;
+    const usdAmt = (o.qty||0) * (o.price||1);
+    if(o.action === 'Compra') total += usdAmt;
+    else                      total -= usdAmt; // Venta o expense
+  });
+  return total;
+}
+
 function renderMainCharts(pf, totGlobal, totARS, totUSD, c){
-  // Line chart
-  const s90=snapshots.slice(-90);
+  // === Línea de evolución del valor ===
+  const sRange = getSnapshotsInRange();
   const lc=el('lineChart'),nc=el('noChart');
-  if(s90.length>=2){
+  // Actualizar título con rango
+  const rangeLabels = {'7d':'7 días','30d':'30 días','90d':'90 días','1y':'1 año','all':'Todo','custom':'Rango custom'};
+  const titleEl = el('lineChartTitle');
+  if(titleEl) titleEl.textContent = `Evolución del portfolio · ${rangeLabels[chartRange]||''} (${sRange.length} snapshots)`;
+  if(sRange.length>=2){
     nc.style.display='none';lc.style.display='block';
     if(_lineChart) _lineChart.destroy();
     _lineChart=new Chart(lc,{
       type:'line',
-      data:{labels:s90.map(s=>s.date.slice(5)),datasets:[{data:s90.map(s=>currency==='USD'?s.usd:s.usd*c),borderColor:'#42a5f5',backgroundColor:'#42a5f514',fill:true,tension:0.4,pointRadius:2}]},
-      options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6b8cba',maxTicksLimit:6},grid:{color:'#eef2f9'}},y:{ticks:{color:'#6b8cba',callback:v=>`$${(v/1000).toFixed(0)}k`},grid:{color:'#eef2f9'}}}}
+      data:{labels:sRange.map(s=>s.date.slice(5)),datasets:[{data:sRange.map(s=>currency==='USD'?s.usd:s.usd*c),borderColor:'#42a5f5',backgroundColor:'#42a5f514',fill:true,tension:0.4,pointRadius:sRange.length<60?2:0,label:'Valor total'}]},
+      options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:it=>`$${n2(it.parsed.y,0)}`}}},scales:{x:{ticks:{color:'#6b8cba',maxTicksLimit:8},grid:{color:'#eef2f9'}},y:{ticks:{color:'#6b8cba',callback:v=>`$${(v/1000).toFixed(0)}k`},grid:{color:'#eef2f9'}}}}
     });
   }else{nc.style.display='block';lc.style.display='none';}
+  // === Stacked: capital aportado vs valoración ===
+  const sc = el('stackChart'); const nsc = el('noStackChart');
+  if(sc && sRange.length >= 2){
+    // Para cada snapshot calcular capital aportado y ganancia por valoración
+    const series = sRange.map(s => {
+      const totalAtDate = s.usd; // en USD
+      const capitalAtDate = getNetCapitalAt(s.date);
+      // La "ganancia por valoración" es lo que excede al capital aportado.
+      // Si el portfolio cayó por debajo del capital, la "ganancia" es negativa.
+      const gainAtDate = totalAtDate - capitalAtDate;
+      return { date: s.date, capital: capitalAtDate, gain: gainAtDate, total: totalAtDate };
+    });
+    // ¿Hay aportes de capital? Si todo es 0, no graficar.
+    const anyCap = series.some(p => p.capital !== 0);
+    if(!anyCap){
+      nsc.style.display = 'block'; sc.style.display = 'none';
+      if(_stackChart){ _stackChart.destroy(); _stackChart = null; }
+    } else {
+      nsc.style.display = 'none'; sc.style.display = 'block';
+      const labels = series.map(p => p.date.slice(5));
+      const mul = currency === 'USD' ? 1 : c;
+      const capData  = series.map(p => p.capital * mul);
+      const gainData = series.map(p => p.gain * mul);
+      if(_stackChart) _stackChart.destroy();
+      _stackChart = new Chart(sc, {
+        type:'line',
+        data:{
+          labels,
+          datasets:[
+            {
+              label:'💰 Capital aportado',
+              data: capData,
+              borderColor:'#1565c0',
+              backgroundColor:'rgba(21,101,192,0.35)',
+              fill: 'origin',
+              tension:0.3,
+              pointRadius: series.length<60?2:0,
+              borderWidth:2,
+              stack:'val',
+            },
+            {
+              label:'📈 Ganancia / Pérdida por valoración',
+              data: gainData,
+              borderColor: gainData[gainData.length-1] >= 0 ? '#00a876' : '#e53935',
+              backgroundColor: gainData[gainData.length-1] >= 0 ? 'rgba(0,168,118,0.4)' : 'rgba(229,57,53,0.4)',
+              fill: '-1',
+              tension:0.3,
+              pointRadius: series.length<60?2:0,
+              borderWidth:2,
+              stack:'val',
+            }
+          ]
+        },
+        options:{
+          responsive:true,
+          plugins:{
+            legend:{display:true,position:'top',labels:{font:{size:11},color:'#6b8cba'}},
+            tooltip:{
+              callbacks:{
+                label: it => {
+                  const v = it.parsed.y;
+                  const sign = v >= 0 ? '+' : '';
+                  return `${it.dataset.label}: ${sign}$${n2(v,0)}`;
+                },
+                afterBody: items => {
+                  if(!items?.length) return '';
+                  const idx = items[0].dataIndex;
+                  const tot = (capData[idx]||0) + (gainData[idx]||0);
+                  return `Total: $${n2(tot,0)}`;
+                }
+              }
+            }
+          },
+          scales:{
+            x:{ticks:{color:'#6b8cba',maxTicksLimit:8},grid:{color:'#eef2f9'}},
+            y:{ticks:{color:'#6b8cba',callback:v=>`$${(v/1000).toFixed(0)}k`},grid:{color:'#eef2f9'},stacked:true}
+          }
+        }
+      });
+    }
+  } else if(sc) {
+    nsc.style.display = 'block'; sc.style.display = 'none';
+    if(_stackChart){ _stackChart.destroy(); _stackChart = null; }
+  }
   // Pie por activo
   const pd=pf.filter(a=>a.value>0).map(a=>({name:a.ticker,value:a.value}));
   if(_pieChart) _pieChart.destroy();
@@ -3263,10 +3438,89 @@ function goTab(name,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   el('page-'+name).classList.add('active');btn.classList.add('active');
+  // Si abrís otra pestaña, cerrar el dropdown de brokers
+  const dd = el('brokersDropdown'); if(dd) dd.style.display='none';
   if(name==='brokers') hideBrokerDetail();
   if(name==='charts') renderMainCharts(enrich(getPortfolio()),0,0,0,ccl());
   if(name==='dividends') renderDividends();
 }
+
+// Dropdown de brokers en la barra de pestañas
+function toggleBrokersDropdown(ev){
+  ev?.stopPropagation();
+  const dd = el('brokersDropdown');
+  if(!dd) return;
+  if(dd.style.display === 'block'){ dd.style.display='none'; return; }
+  // Rellenar con la lista de brokers, ordenados por valor descendente
+  const pfFull = enrich(getPortfolio());
+  const brokerVals = {};
+  brokers.forEach(b => { brokerVals[b] = 0; });
+  pfFull.forEach(a => {
+    a.brkList?.forEach(b => {
+      // Distribuir valor del activo entre sus brokers (asume distribución equitativa si hay varios)
+      if(brokerVals[b] != null) brokerVals[b] += (a.value||0) / a.brkList.length;
+    });
+  });
+  const sortedBrokers = [...brokers].sort((a,b) => (brokerVals[b]||0) - (brokerVals[a]||0));
+  const c = ccl();
+  let html = `<div style="padding:8px 10px;border-bottom:1px solid var(--blueL);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;display:flex;justify-content:space-between;align-items:center">
+    <span>Mis brokers</span>
+    <button onclick="event.stopPropagation();gotoBrokerGrid()" style="background:none;border:1px solid var(--blueL);cursor:pointer;color:var(--muted);font-size:10px;padding:2px 6px;border-radius:4px">📋 Ver grilla</button>
+  </div>`;
+  if(!sortedBrokers.length){
+    html += `<div style="padding:12px;color:var(--muted);font-size:12px;text-align:center">No hay brokers todavía.</div>`;
+  } else {
+    sortedBrokers.forEach(b => {
+      const logo = getBrokerLogo(b);
+      const val = brokerVals[b] || 0;
+      const curBroker = getBrokerCurrency(b);
+      const valDisplay = curBroker === 'ARS' ? $a(val*c) : $u(val);
+      const curColor = curBroker === 'ARS' ? 'var(--gold)' : 'var(--green)';
+      html += `<div onclick="event.stopPropagation();gotoBrokerFromDropdown('${b.replace(/'/g,"\\'")}')"
+        style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--blueLL);transition:background 0.1s"
+        onmouseover="this.style.background='var(--blueLL)'" onmouseout="this.style.background=''">
+        ${logo?`<img src="${logo}" style="width:18px;height:18px;border-radius:3px" onerror="this.style.display='none'">`:'<span style="width:18px"></span>'}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${b}</div>
+          <div style="font-size:10px;color:var(--muted)">${val > 0 ? valDisplay : 'Sin activos'}</div>
+        </div>
+        <span style="font-size:9px;color:${curColor};font-weight:600;border:1px solid ${curColor};padding:1px 4px;border-radius:3px">${curBroker}</span>
+      </div>`;
+    });
+  }
+  dd.innerHTML = html;
+  dd.style.display = 'block';
+}
+
+function gotoBrokerFromDropdown(name){
+  // Cerrar dropdown
+  const dd = el('brokersDropdown'); if(dd) dd.style.display='none';
+  // Activar la pestaña Brokers programáticamente
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el('page-brokers').classList.add('active');
+  const tabBtn = el('brokersTabBtn'); if(tabBtn) tabBtn.classList.add('active');
+  // Ir directo al detalle
+  showBrokerDetail(name);
+}
+
+function gotoBrokerGrid(){
+  const dd = el('brokersDropdown'); if(dd) dd.style.display='none';
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el('page-brokers').classList.add('active');
+  const tabBtn = el('brokersTabBtn'); if(tabBtn) tabBtn.classList.add('active');
+  hideBrokerDetail();
+}
+
+// Cerrar dropdown al hacer click afuera
+document.addEventListener('click', (e) => {
+  const dd = el('brokersDropdown');
+  const btn = el('brokersTabBtn');
+  if(dd && dd.style.display === 'block' && !dd.contains(e.target) && e.target !== btn){
+    dd.style.display = 'none';
+  }
+});
 function openOverlay(name){el('overlay-'+name).classList.add('open');}
 function closeOverlay(name){el('overlay-'+name).classList.remove('open');}
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3284,6 +3538,8 @@ if(localStorage.getItem('pf6_fmp')){
   el('btnFMP').className='btn btn-green';
 }
 applyAuthGate(false);
+// Sincronizar el botón de rango activo con el chartRange guardado
+document.querySelectorAll('.rng-btn').forEach(b => b.classList.toggle('active', b.dataset.range === chartRange));
 supa.auth.getSession().then(({data:{session}})=>{
   if(session?.user){ onLogin(session.user); }
   else { clearAllLocalData(); openOverlay('login'); }
