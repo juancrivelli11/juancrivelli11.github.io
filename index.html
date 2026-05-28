@@ -112,7 +112,7 @@ body.dark canvas{filter:brightness(0.9)}
 /* TABS */
 .tabs-bar{padding:10px 16px 0}
 .tabs{display:inline-flex;gap:2px;background:var(--blueL);padding:3px;
-  border-radius:9px;border:1px solid var(--border);overflow-x:auto}
+  border-radius:9px;border:1px solid var(--border);overflow:visible;flex-wrap:wrap}
 .tab{padding:7px 12px;border:none;border-radius:6px;cursor:pointer;
   font-weight:600;font-size:12px;font-family:inherit;
   background:transparent;color:var(--muted);white-space:nowrap}
@@ -3270,16 +3270,22 @@ function saveOrder(){
     notes:finalNotes,
     expense: isGasto ? true : undefined,
   });
-  // Auto-adjust USD/USDT liquidity for non-ARS brokers
+  // Auto-adjust de liquidez: cuando comprás/vendés un activo, ajusta automáticamente
+  // el saldo de cash en el broker para reflejar el movimiento.
+  //
   // NO aplicar:
   //  - para Gastos/Retiros (la orden ya es la salida directa de liquidez)
-  //  - cuando el ticker COMPRADO/VENDIDO es la liquidez en sí (USD/USDT/USDC/etc.)
+  //  - cuando el ticker COMPRADO/VENDIDO es la liquidez en sí (USD/USDT/USDC/ARS/etc.)
   //    porque si no se duplica la operación y deja saldo neto en 0.
   //  - cuando el mercado elegido es "Liquidez" (registrás cash directamente).
-  if(!isGasto && !isA && broker && !isARSBroker(broker) && !isCash(ticker) && mktVal !== 'liquidez'){
+  if(!isGasto && broker && !isCash(ticker) && mktVal !== 'liquidez'){
     const totalUSD = qty * priceUSD + commUSD;
-    // Check for USD or USDT liquidity in this broker
-    const stableTickers = ['USD','USDT','USDC'];
+    const totalARS = totalUSD * (c || 1);
+    const brokerCur = getBrokerCurrency(broker);
+    // Buscar liquidez del tipo del broker
+    const stableTickers = brokerCur === 'ARS'
+      ? ['ARS','PESOS']
+      : ['USD','USDT','USDC'];
     let liqTicker = null;
     for(const st of stableTickers){
       const stOrds = orders.filter(o=>o.ticker===st&&(o.broker||'').toLowerCase()===broker.toLowerCase());
@@ -3287,12 +3293,18 @@ function saveOrder(){
       if(stQty > 0){ liqTicker = st; break; }
     }
     if(liqTicker){
+      const isLiqARS = liqTicker === 'ARS' || liqTicker === 'PESOS';
+      const adjQty   = isLiqARS ? totalARS : totalUSD;
+      const adjPrice = isLiqARS ? (c > 0 ? 1/c : 0) : 1;
       orders.push({
         id:Date.now()+2,
-        ticker:liqTicker,type:liqTicker==='USD'?'Acción USA':'Cripto',
+        ticker:liqTicker,
+        type:isLiqARS ? 'Acción Argentina' : (liqTicker==='USD' ? 'Acción USA' : 'Cripto'),
         action:isCompra?'Venta':'Compra',
-        qty:totalUSD,price:1,priceOrig:1,
-        currency:'USD',cclAtOrder:null,comm:0,
+        qty:adjQty,price:adjPrice,priceOrig:isLiqARS?1:1,
+        currency:isLiqARS?'ARS':'USD',
+        cclAtOrder:isLiqARS?c:null,
+        comm:0,
         broker,date:orderDate,
         notes:`Auto: ${isCompra?'compra':'venta'} de ${ticker}`,
         auto:true
