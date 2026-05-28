@@ -458,8 +458,12 @@ body.dark #auth-welcome h2{color:#90caf9}
     <div class="page" id="page-dividends">
       <div class="sec-hdr">
         <span class="sec-title">💰 DIVIDENDOS COBRADOS</span>
-        <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="scanDividendsNow()">↻ Buscar dividendos ahora</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="scanDividendsNow()">↻ Buscar dividendos ahora</button>
+          <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px;color:var(--red)" onclick="cleanupRetroactiveDividends()" title="Borrar todos los dividendos retroactivos y empezar el tracking desde hoy">🧹 Limpiar retroactivos</button>
+        </div>
       </div>
+      <div id="divTrackingInfo" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
       <!-- KPIs -->
       <div class="kpi-row" id="divKpiRow" style="margin-bottom:14px"></div>
       <!-- Totales por activo -->
@@ -1191,9 +1195,18 @@ async function detectAndRegisterDividends(){
   const pf = getPortfolio();
   // Activos elegibles: no cash, no cripto
   const eligible = pf.filter(a => !isCash(a.ticker) && a.type !== 'Cripto');
-  if(!eligible.length) return { added: 0, scanned: 0 };
+  if(!eligible.length) return { added: 0, scanned: 0, newDivs: [] };
+  // Cutoff: solo registrar dividendos con fecha >= a la fecha de inicio del tracking.
+  // Si el usuario nunca activó el tracking, se establece HOY como fecha de inicio
+  // para no registrar dividendos viejos retroactivamente.
+  let trackingStart = localStorage.getItem('pf6_divTrackingStart');
+  if(!trackingStart){
+    trackingStart = new Date().toISOString().slice(0,10);
+    localStorage.setItem('pf6_divTrackingStart', trackingStart);
+  }
   setStatus(`Detectando dividendos (0/${eligible.length})...`, true);
   let added = 0, scanned = 0;
+  const newDivs = []; // detalles para notificación
   // Paralelizar con límite
   const CONC = 4;
   let cursor = 0;
@@ -1214,6 +1227,8 @@ async function detectAndRegisterDividends(){
             for(const div of divs){
               const divId = `div_${a.ticker}_${div.date}_${brk}`;
               if(orders.some(o => o.divId === divId)) continue;
+              // CUTOFF: solo registrar divs con fecha >= tracking start (no retroactivos)
+              if(div.date < trackingStart) continue;
               // Cantidad poseída al momento del dividendo
               const qtyHeld = qtyAtDate(a.ticker, brk, div.date);
               if(qtyHeld <= 0) continue;
@@ -1251,6 +1266,11 @@ async function detectAndRegisterDividends(){
                 dividendCurrency: brokerCur,
               });
               added++;
+              newDivs.push({
+                ticker: a.ticker, date: div.date, broker: brk,
+                grossUSD, netUSD, taxRate, brokerCur,
+                qty: qtyHeld, perShare: div.amount,
+              });
             }
           }
         }
@@ -1265,7 +1285,23 @@ async function detectAndRegisterDividends(){
     await save();
     setStatus(`✓ ${added} dividendo${added!==1?'s':''} nuevo${added!==1?'s':''} registrado${added!==1?'s':''}`, false);
   }
-  return { added, scanned };
+  return { added, scanned, newDivs };
+}
+
+// Borra todos los dividendos auto-generados (cleanup retroactivos).
+// Resetea la fecha de inicio del tracking para evitar que vuelvan a aparecer.
+async function clearAllAutoDividends(){
+  const before = orders.length;
+  orders = orders.filter(o => !o.dividend);
+  const removed = before - orders.length;
+  // Establecer hoy como nueva fecha de inicio del tracking
+  localStorage.setItem('pf6_divTrackingStart', new Date().toISOString().slice(0,10));
+  // Resetear el último scan para que la próxima vez vuelva a escanear (sólo a futuro)
+  localStorage.removeItem('pf6_lastDivScan');
+  await save();
+  render();
+  if(typeof renderDividends === 'function') renderDividends();
+  return removed;
 }
 function enrich(pf){
   const c=ccl();
@@ -1515,9 +1551,15 @@ async function doRefresh(force=false){
   if(force || divAge > 24*60*60*1000){
     try{
       const result = await detectAndRegisterDividends();
-      if(result.added > 0){
-        // Notificar al usuario en pantalla
-        console.log(`✓ ${result.added} dividendos detectados`);
+      if(result.added > 0 && result.newDivs){
+        // Notificación detallada
+        const lines = result.newDivs
+          .sort((a,b)=>(a.date||'').localeCompare(b.date||''))
+          .map(d => `• ${d.date} · ${d.ticker} en ${d.broker}: ${d.qty.toFixed(2)} × $${d.perShare.toFixed(4)} = ${$u(d.grossUSD)} bruto → ${$u(d.netUSD)} neto (${d.brokerCur})`);
+        const totalNet = result.newDivs.reduce((s,d)=>s+d.netUSD,0);
+        setTimeout(()=>{
+          alert(`💰 ${result.added} dividendo${result.added!==1?'s':''} nuevo${result.added!==1?'s':''} detectado${result.added!==1?'s':''}:\n\n${lines.join('\n')}\n\nTotal neto: ${$u(totalNet)} USD\n\nLos montos se sumaron a tu liquidez en el broker correspondiente. Mirá la pestaña 💰 Dividendos.`);
+        }, 500);
       }
     } catch(e){ console.warn('Div scan failed', e); }
     localStorage.setItem('pf6_lastDivScan', Date.now().toString());
@@ -1797,6 +1839,16 @@ function getDividendOrders(){
 
 function renderDividends(){
   const divs = getDividendOrders();
+  // Info banner: fecha de inicio del tracking
+  const infoEl = el('divTrackingInfo');
+  if(infoEl){
+    const startDate = localStorage.getItem('pf6_divTrackingStart');
+    if(startDate){
+      infoEl.innerHTML = `📅 Tracking automático desde <strong>${startDate}</strong>. Sólo se registran dividendos con fecha igual o posterior. Los anteriores los podés cargar manualmente.`;
+    } else {
+      infoEl.innerHTML = '📅 El tracking se activa al primer escaneo. De ahí en más se registran sólo los dividendos nuevos.';
+    }
+  }
   // KPIs
   const kpiRow = el('divKpiRow');
   if(!kpiRow) return;
@@ -1886,18 +1938,41 @@ async function scanDividendsNow(){
   setStatus('Escaneando dividendos...', true);
   try{
     const result = await detectAndRegisterDividends();
-    if(result.added > 0){
-      alert(`✓ ${result.added} dividendo${result.added!==1?'s':''} nuevo${result.added!==1?'s':''} registrado${result.added!==1?'s':''}.`);
+    if(result.added > 0 && result.newDivs){
+      const lines = result.newDivs
+        .sort((a,b)=>(a.date||'').localeCompare(b.date||''))
+        .map(d => `• ${d.date} · ${d.ticker} en ${d.broker}: ${d.qty.toFixed(2)} × $${d.perShare.toFixed(4)} = ${$u(d.grossUSD)} bruto → ${$u(d.netUSD)} neto`);
+      const totalNet = result.newDivs.reduce((s,d)=>s+d.netUSD,0);
+      alert(`💰 ${result.added} dividendo${result.added!==1?'s':''} nuevo${result.added!==1?'s':''}:\n\n${lines.join('\n')}\n\nTotal neto: ${$u(totalNet)} USD`);
       render();
       renderDividends();
     } else {
-      alert('No se encontraron dividendos nuevos para registrar.');
+      const trackStart = localStorage.getItem('pf6_divTrackingStart') || 'sin fecha';
+      alert(`No se encontraron dividendos nuevos.\n\nTracking activo desde: ${trackStart}\nSólo se registran dividendos con fecha posterior a esa fecha.`);
     }
     localStorage.setItem('pf6_lastDivScan', Date.now().toString());
   } catch(e){
     alert('Error escaneando dividendos: ' + e.message);
   }
   setStatus('', false);
+}
+
+async function cleanupRetroactiveDividends(){
+  const existing = orders.filter(o => o.dividend).length;
+  if(existing === 0){
+    alert('No hay dividendos auto-generados para limpiar.');
+    return;
+  }
+  const msg = `¿Borrar los ${existing} dividendos auto-generados?\n\n` +
+              `Esta acción:\n` +
+              `• Borra todos los dividendos retroactivos detectados hasta ahora.\n` +
+              `• Establece HOY como fecha de inicio del tracking de dividendos.\n` +
+              `• De ahora en adelante, sólo se registrarán los pagos NUEVOS (con fecha posterior a hoy).\n` +
+              `• Tu liquidez se va a corregir automáticamente.\n\n` +
+              `¿Continuar?`;
+  if(!confirm(msg)) return;
+  const removed = await clearAllAutoDividends();
+  alert(`✓ Se borraron ${removed} dividendos retroactivos.\nTracking ahora arranca desde ${new Date().toISOString().slice(0,10)}.`);
 }
 
 function renderOrders(){
