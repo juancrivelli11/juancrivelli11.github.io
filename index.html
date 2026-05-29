@@ -2153,12 +2153,18 @@ function showBrokerDetail(name){
   const pnlARS  = pf.reduce((s,a) => s + (isARS(a.type) ? (a.pnl||0)*c3 : (a.pnl||0)*mep), 0);
   const totCostDisplay = brokerIsARS ? $a(costARS) : $u(totCost);
   const totPnLDisplay  = (totPnL>=0?'+':'') + (brokerIsARS ? $a(pnlARS) : $u(totPnL));
-  [
-    {l:'Valor Total',v:totValDisplay,c:roe>=0?'var(--blue)':'var(--txt)'},
-    {l:'Costo Base',v:totCostDisplay,c:'var(--txt)'},
-    {l:'P&L',v:totPnLDisplay,c:totPnL>=0?'var(--green)':'var(--red)'},
-    {l:'ROE',v:(roe>=0?'+':'')+n2(roe,2)+'%',c:roe>=0?'var(--green)':'var(--red)'},
-  ].forEach(k=>{
+  // ¿El broker es 100% liquidez? (caja fuerte, cuenta bancaria, billetera, etc.)
+  // En ese caso no tiene sentido mostrar Costo / P&L / ROE — todo es cash 1:1.
+  const onlyCash = pf.length > 0 && pf.every(a => isCash(a.ticker));
+  const kpiDefs = onlyCash
+    ? [{l:'Liquidez total',v:totValDisplay,c:'var(--blue)'}]
+    : [
+        {l:'Valor Total',v:totValDisplay,c:roe>=0?'var(--blue)':'var(--txt)'},
+        {l:'Costo Base',v:totCostDisplay,c:'var(--txt)'},
+        {l:'P&L',v:totPnLDisplay,c:totPnL>=0?'var(--green)':'var(--red)'},
+        {l:'ROE',v:(roe>=0?'+':'')+n2(roe,2)+'%',c:roe>=0?'var(--green)':'var(--red)'},
+      ];
+  kpiDefs.forEach(k=>{
     const d=document.createElement('div');d.className='kpi-card';
     d.innerHTML=`<label>${k.l}</label><div class="val" style="color:${k.c}">${k.v}</div>`;
     kpi.appendChild(d);
@@ -2177,33 +2183,41 @@ function showBrokerDetail(name){
   if(_brokerPie) _brokerPie.destroy();
   if(pd.length) _brokerPie=new Chart(pieC,{type:'doughnut',data:{labels:pd.map(d=>d.name),datasets:[{data:pd.map(d=>d.value),backgroundColor:COLS,borderWidth:2,borderColor:'#f5f7fa'}]},options:{responsive:false,plugins:{legend:{display:false}}}});
   grid.appendChild(pieBox);
-  // ARS vs USD
-  const arsBox=document.createElement('div');arsBox.className='chart-box';
-  arsBox.innerHTML='<h3>ARS vs USD</h3>';
-  const arsC=document.createElement('canvas');arsC.width=110;arsC.height=110;
-  const arsLeg=document.createElement('div');
-  const tot2=arsVal+usdVal;
-  arsLeg.style.cssText='font-size:10px;margin-top:8px';
-  arsLeg.innerHTML=`<div class="pie-row"><div><span class="pie-dot" style="background:#f59f00"></span>ARS (${n2(tot2>0?arsVal/tot2*100:0)}%)</div><span>${$u(arsVal)}</span></div>
-    <div class="pie-row"><div><span class="pie-dot" style="background:#1565c0"></span>USD (${n2(tot2>0?usdVal/tot2*100:0)}%)</div><span>${$u(usdVal)}</span></div>`;
-  const arsWrap=document.createElement('div');arsWrap.style.cssText='display:flex;flex-direction:column;align-items:center';
-  arsWrap.appendChild(arsC);arsWrap.appendChild(arsLeg);arsBox.appendChild(arsWrap);
-  if(_brokerArs) _brokerArs.destroy();
-  _brokerArs=new Chart(arsC,{type:'doughnut',data:{labels:['ARS','USD'],datasets:[{data:[arsVal,usdVal],backgroundColor:['#f59f00','#1565c0'],borderWidth:2,borderColor:'#f5f7fa'}]},options:{responsive:false,plugins:{legend:{display:false}}}});
-  grid.appendChild(arsBox);
-  // Bar rendimiento — Excluir liquidez (ARS/USD/USDT etc. no tienen rendimiento real,
-  // siempre dan 0% y ensucian la gráfica).
-  const barBox=document.createElement('div');barBox.className='chart-box chart-full';
-  barBox.innerHTML='<h3>Rendimiento % por activo</h3>';
-  const barC=document.createElement('canvas');barC.height=100;
-  barBox.appendChild(barC);grid.appendChild(barBox);
+  // ARS vs USD — sólo si hay activos en ambas monedas (sino no aporta nada).
+  const hasBothCurrencies = arsVal > 0 && usdVal > 0;
+  if(hasBothCurrencies){
+    const arsBox=document.createElement('div');arsBox.className='chart-box';
+    arsBox.innerHTML='<h3>ARS vs USD</h3>';
+    const arsC=document.createElement('canvas');arsC.width=110;arsC.height=110;
+    const arsLeg=document.createElement('div');
+    const tot2=arsVal+usdVal;
+    arsLeg.style.cssText='font-size:10px;margin-top:8px';
+    arsLeg.innerHTML=`<div class="pie-row"><div><span class="pie-dot" style="background:#f59f00"></span>ARS (${n2(tot2>0?arsVal/tot2*100:0)}%)</div><span>${$u(arsVal)}</span></div>
+      <div class="pie-row"><div><span class="pie-dot" style="background:#1565c0"></span>USD (${n2(tot2>0?usdVal/tot2*100:0)}%)</div><span>${$u(usdVal)}</span></div>`;
+    const arsWrap=document.createElement('div');arsWrap.style.cssText='display:flex;flex-direction:column;align-items:center';
+    arsWrap.appendChild(arsC);arsWrap.appendChild(arsLeg);arsBox.appendChild(arsWrap);
+    if(_brokerArs) _brokerArs.destroy();
+    _brokerArs=new Chart(arsC,{type:'doughnut',data:{labels:['ARS','USD'],datasets:[{data:[arsVal,usdVal],backgroundColor:['#f59f00','#1565c0'],borderWidth:2,borderColor:'#f5f7fa'}]},options:{responsive:false,plugins:{legend:{display:false}}}});
+    grid.appendChild(arsBox);
+  } else {
+    if(_brokerArs){ _brokerArs.destroy(); _brokerArs=null; }
+  }
+  // Bar rendimiento — Excluir liquidez. Si el broker es 100% cash, no mostrar.
   const pfPnl = pf.filter(a => !isCash(a.ticker) && a.pnlPct != null);
-  if(_brokerBar) _brokerBar.destroy();
-  if(pfPnl.length) _brokerBar=new Chart(barC,{
-    type:'bar',
-    data:{labels:pfPnl.map(a=>a.ticker),datasets:[{data:pfPnl.map(a=>a.pnlPct||0),backgroundColor:pfPnl.map(a=>(a.pnlPct||0)>=0?'#00a87666':'#e5393566'),borderColor:pfPnl.map(a=>(a.pnlPct||0)>=0?'#00a876':'#e53935'),borderWidth:1}]},
-    options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6b8cba',font:{size:10}},grid:{display:false}},y:{ticks:{color:'#6b8cba',callback:v=>`${v}%`},grid:{color:'#eef2f9'}}}}
-  });
+  if(!onlyCash && pfPnl.length){
+    const barBox=document.createElement('div');barBox.className='chart-box chart-full';
+    barBox.innerHTML='<h3>Rendimiento % por activo</h3>';
+    const barC=document.createElement('canvas');barC.height=100;
+    barBox.appendChild(barC);grid.appendChild(barBox);
+    if(_brokerBar) _brokerBar.destroy();
+    _brokerBar=new Chart(barC,{
+      type:'bar',
+      data:{labels:pfPnl.map(a=>a.ticker),datasets:[{data:pfPnl.map(a=>a.pnlPct||0),backgroundColor:pfPnl.map(a=>(a.pnlPct||0)>=0?'#00a87666':'#e5393566'),borderColor:pfPnl.map(a=>(a.pnlPct||0)>=0?'#00a876':'#e53935'),borderWidth:1}]},
+      options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#6b8cba',font:{size:10}},grid:{display:false}},y:{ticks:{color:'#6b8cba',callback:v=>`${v}%`},grid:{color:'#eef2f9'}}}}
+    });
+  } else {
+    if(_brokerBar){ _brokerBar.destroy(); _brokerBar=null; }
+  }
   // Line chart: global portfolio evolution
   const lineBox=document.createElement('div');lineBox.className='chart-box';
   lineBox.innerHTML='<h3>Evolución del portfolio global (90 días)</h3>';
