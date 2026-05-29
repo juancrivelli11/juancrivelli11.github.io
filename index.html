@@ -56,6 +56,8 @@ body.dark .ac-list{background:#0d1520;border-color:#1e2d45}
 body.dark .ac-item{border-color:#1a2236;color:#e8f0fe}
 body.dark .ac-item:hover{background:#111827}
 body.dark .ord-card{background:#0d1520;border-color:#1e2d45;color:#e8f0fe}
+body.dark #brokersDropdown{background:#0d1520!important;border-color:#1e2d45!important;color:#e8f0fe}
+body.dark #brokersDropdown div{color:#e8f0fe}
 body.dark .ord-card strong{color:#90caf9}
 body.dark .ord-card .ord-row > div > div[style*="font-family:monospace"]{color:#90caf9}
 body.dark .add-broker input{background:#111827;border-color:#1e2d45;color:#e8f0fe}
@@ -2141,18 +2143,54 @@ function showBrokerDetail(name){
   const totVal=pf.reduce((s,a)=>s+(a.hasPx?a.value:a.cost),0);
   const totCost=pf.reduce((s,a)=>s+a.cost,0);
   const totPnL=pf.reduce((s,a)=>s+(a.pnl||0),0);
-  // ROE en USD (default)
-  const roeUSD = totCost>0 ? totPnL/totCost*100 : 0;
-  // ROE en ARS — para brokers ARS este es el cálculo correcto, usando los pesos
-  // que efectivamente pagaste (costOrig) vs el valor actual en pesos.
-  // pnlARSNative = (valor ARS hoy) - (costo ARS al comprar)
+  // === ROE VERDADERO: basado en capital neto aportado al broker ===
+  // Capital aportado neto = Compras de cash (depósitos reales) - Ventas/Gastos de cash (retiros)
+  // EXCLUYE: dividendos (son ganancia, no aporte) y movimientos auto-generados
+  // (resultado de operaciones internas, no son aportes nuevos).
+  let netCapitalUSD = 0;
+  let netCapitalARS = 0;
+  orders.forEach(o => {
+    if((o.broker||'').toLowerCase().trim() !== (name||'').toLowerCase().trim()) return;
+    if(!isCash(o.ticker)) return;
+    if(o.dividend || o.auto) return;
+    const usdAmt = (o.qty || 0) * (o.price || 1);
+    const cclOrd = o.cclAtOrder || c;
+    const arsAmt = (o.currency === 'ARS')
+      ? (o.qty || 0) * (o.priceOrig || 1)   // ya en pesos históricos
+      : usdAmt * cclOrd;                     // USD convertido al CCL del momento
+    if(o.action === 'Compra'){
+      netCapitalUSD += usdAmt;
+      netCapitalARS += arsAmt;
+    } else {
+      netCapitalUSD -= usdAmt;
+      netCapitalARS -= arsAmt;
+    }
+  });
+  // Valor actual del broker en su moneda nativa
+  const valueUSDForROE = pf.reduce((s,a) => s + (a.hasPx ? a.value : a.cost), 0);
+  const valueARSForROE = pf.reduce((s,a) => {
+    const v = a.hasPx ? a.value : a.cost;
+    // Para ARS-type assets: si hay precio, value*c da el valor en ARS actual; si no, costOrig.
+    // Para USD-type assets: valor USD * c (al CCL actual) o el cash USD en ARS al CCL actual.
+    if(isARS(a.type)) return s + (a.hasPx ? v*c : (a.costOrig||v*c));
+    if(isCash(a.ticker)){
+      // Cash USD/USDT/USDC se valoriza al CCL actual
+      return s + v*c;
+    }
+    return s + v*c; // USD assets en pesos
+  }, 0);
+  // True ROE
+  const truePnLUSD = valueUSDForROE - netCapitalUSD;
+  const truePnLARS = valueARSForROE - netCapitalARS;
+  const trueRoeUSD = netCapitalUSD > 0 ? truePnLUSD / netCapitalUSD * 100 : null;
+  const trueRoeARS = netCapitalARS > 0 ? truePnLARS / netCapitalARS * 100 : null;
+  // Legacy: ROE/PnL en ARS basado en costOrig (para mostrar como referencia secundaria)
   const costARSNative  = pf.reduce((s,a) => s + (isARS(a.type) ? (a.costOrig||0) : 0), 0);
   const valueARSNative = pf.reduce((s,a) => {
     if(!isARS(a.type)) return s;
     return s + (a.hasPx ? a.value * c : (a.costOrig||0));
   }, 0);
   const pnlARSNative = valueARSNative - costARSNative;
-  const roeARS = costARSNative > 0 ? pnlARSNative / costARSNative * 100 : 0;
   const arsVal=pf.filter(a=>isARS(a.type)).reduce((s,a)=>s+(a.hasPx?a.value:a.cost),0);
   const usdVal=pf.filter(a=>!isARS(a.type)).reduce((s,a)=>s+(a.hasPx?a.value:a.cost),0);
   // Use value or cost for pie chart
@@ -2172,23 +2210,31 @@ function showBrokerDetail(name){
   },0);
   const brokerIsARS = isARSBroker(name);
   const totValDisplay  = brokerIsARS ? $a(totAllARS) : $u(totAllUSD);
-  // Para brokers ARS usamos los pesos históricos (lo que efectivamente pagaste)
-  // para el Costo Base, P&L y ROE — sino el peso devaluado distorsiona todo.
-  const totCostDisplay = brokerIsARS ? $a(costARSNative) : $u(totCost);
-  const pnlForDisplay  = brokerIsARS ? pnlARSNative : totPnL;
-  const totPnLDisplay  = (pnlForDisplay>=0?'+':'') + (brokerIsARS ? $a(pnlARSNative) : $u(totPnL));
-  // ROE final según moneda del broker
-  const roe = brokerIsARS ? roeARS : roeUSD;
+  // === KPI Capital Aportado: la plata REAL que metiste a este broker ===
+  // Para brokers ARS mostramos en pesos históricos; para USD en USD.
+  const netCapital = brokerIsARS ? netCapitalARS : netCapitalUSD;
+  const netCapitalDisplay = brokerIsARS ? $a(netCapital) : $u(netCapital);
+  // True P&L y True ROE
+  const truePnL = brokerIsARS ? truePnLARS : truePnLUSD;
+  const trueRoe = brokerIsARS ? trueRoeARS : trueRoeUSD;
+  const truePnLDisplay = netCapital > 0
+    ? (truePnL>=0?'+':'') + (brokerIsARS ? $a(truePnL) : $u(truePnL))
+    : '—';
+  const trueRoeDisplay = trueRoe != null
+    ? (trueRoe>=0?'+':'') + n2(trueRoe,2) + '%'
+    : '—';
+  // Flag para alertar al usuario si falta data de aportes
+  const hasInsufficientCapitalData = pf.length > 0 && netCapital <= 0;
   // ¿El broker es 100% liquidez? (caja fuerte, cuenta bancaria, billetera, etc.)
   // En ese caso no tiene sentido mostrar Costo / P&L / ROE — todo es cash 1:1.
   const onlyCash = pf.length > 0 && pf.every(a => isCash(a.ticker));
   const kpiDefs = onlyCash
     ? [{l:'Liquidez total',v:totValDisplay,c:'var(--blue)'}]
     : [
-        {l:'Valor Total',v:totValDisplay,c:roe>=0?'var(--blue)':'var(--txt)'},
-        {l:'Costo Base',v:totCostDisplay,c:'var(--txt)'},
-        {l:'P&L',v:totPnLDisplay,c:pnlForDisplay>=0?'var(--green)':'var(--red)'},
-        {l:'ROE',v:(roe>=0?'+':'')+n2(roe,2)+'%',c:roe>=0?'var(--green)':'var(--red)'},
+        {l:'Valor Total',v:totValDisplay,c:truePnL>=0?'var(--blue)':'var(--txt)'},
+        {l:'Capital Aportado',v:netCapital>0?netCapitalDisplay:'—',c:'var(--txt)'},
+        {l:'P&L Verdadero',v:truePnLDisplay,c:netCapital>0?(truePnL>=0?'var(--green)':'var(--red)'):'var(--muted)'},
+        {l:'ROE Verdadero',v:trueRoeDisplay,c:netCapital>0?(trueRoe>=0?'var(--green)':'var(--red)'):'var(--muted)'},
       ];
   kpiDefs.forEach(k=>{
     const d=document.createElement('div');d.className='kpi-card';
@@ -2196,6 +2242,14 @@ function showBrokerDetail(name){
     kpi.appendChild(d);
   });
   kpiEl.appendChild(kpi);
+  // Si el broker tiene activos pero no hay aportes de capital registrados,
+  // mostrar un aviso para que el usuario sepa por qué falta la métrica.
+  if(hasInsufficientCapitalData){
+    const warn = document.createElement('div');
+    warn.style.cssText = 'margin-top:8px;padding:8px 12px;background:rgba(245,159,0,0.1);border-left:3px solid var(--gold);border-radius:4px;font-size:11px;color:var(--muted)';
+    warn.innerHTML = `ℹ️ Para ver el <strong>ROE Verdadero</strong> de este broker, registrá los depósitos de cash como <strong>Compras de USD/USDT/ARS</strong> en este broker (las compras de activos van a descontar automáticamente la liquidez). Las posiciones cargadas antes de empezar a registrar depósitos no van a aparecer en el ROE Verdadero.`;
+    kpiEl.appendChild(warn);
+  }
   // Charts grid
   const grid=document.createElement('div');grid.className='charts-grid';
   // Pie composición
@@ -3562,12 +3616,13 @@ function toggleBrokersDropdown(ev){
       const curBroker = getBrokerCurrency(b);
       const valDisplay = curBroker === 'ARS' ? $a(val*c) : $u(val);
       const curColor = curBroker === 'ARS' ? 'var(--gold)' : 'var(--green)';
+      const darkTxt = document.body.classList.contains('dark') ? '#e8f0fe' : 'var(--txt)';
       html += `<div onclick="event.stopPropagation();gotoBrokerFromDropdown('${b.replace(/'/g,"\\'")}')"
-        style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--blueLL);transition:background 0.1s"
+        style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--blueLL);transition:background 0.1s;color:${darkTxt}"
         onmouseover="this.style.background='var(--blueLL)'" onmouseout="this.style.background=''">
         ${logo?`<img src="${logo}" style="width:18px;height:18px;border-radius:3px" onerror="this.style.display='none'">`:'<span style="width:18px"></span>'}
         <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:13px">${b}</div>
+          <div style="font-weight:600;font-size:13px;color:${darkTxt}">${b}</div>
           <div style="font-size:10px;color:var(--muted)">${val > 0 ? valDisplay : 'Sin activos'}</div>
         </div>
         <span style="font-size:9px;color:${curColor};font-weight:600;border:1px solid ${curColor};padding:1px 4px;border-radius:3px">${curBroker}</span>
