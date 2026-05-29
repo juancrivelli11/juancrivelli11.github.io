@@ -2127,7 +2127,18 @@ function showBrokerDetail(name){
   const totVal=pf.reduce((s,a)=>s+(a.hasPx?a.value:a.cost),0);
   const totCost=pf.reduce((s,a)=>s+a.cost,0);
   const totPnL=pf.reduce((s,a)=>s+(a.pnl||0),0);
-  const roe=totCost>0?totPnL/totCost*100:0;
+  // ROE en USD (default)
+  const roeUSD = totCost>0 ? totPnL/totCost*100 : 0;
+  // ROE en ARS — para brokers ARS este es el cálculo correcto, usando los pesos
+  // que efectivamente pagaste (costOrig) vs el valor actual en pesos.
+  // pnlARSNative = (valor ARS hoy) - (costo ARS al comprar)
+  const costARSNative  = pf.reduce((s,a) => s + (isARS(a.type) ? (a.costOrig||0) : 0), 0);
+  const valueARSNative = pf.reduce((s,a) => {
+    if(!isARS(a.type)) return s;
+    return s + (a.hasPx ? a.value * c : (a.costOrig||0));
+  }, 0);
+  const pnlARSNative = valueARSNative - costARSNative;
+  const roeARS = costARSNative > 0 ? pnlARSNative / costARSNative * 100 : 0;
   const arsVal=pf.filter(a=>isARS(a.type)).reduce((s,a)=>s+(a.hasPx?a.value:a.cost),0);
   const usdVal=pf.filter(a=>!isARS(a.type)).reduce((s,a)=>s+(a.hasPx?a.value:a.cost),0);
   // Use value or cost for pie chart
@@ -2147,12 +2158,13 @@ function showBrokerDetail(name){
   },0);
   const brokerIsARS = isARSBroker(name);
   const totValDisplay  = brokerIsARS ? $a(totAllARS) : $u(totAllUSD);
-  // Costo y P&L también en la moneda del broker.
-  // Costo base ARS: para cada activo, costo*CCL si es ARS-type, o costo*MEP si es USD-type.
-  const costARS = pf.reduce((s,a) => s + (isARS(a.type) ? a.cost*c3 : a.cost*mep), 0);
-  const pnlARS  = pf.reduce((s,a) => s + (isARS(a.type) ? (a.pnl||0)*c3 : (a.pnl||0)*mep), 0);
-  const totCostDisplay = brokerIsARS ? $a(costARS) : $u(totCost);
-  const totPnLDisplay  = (totPnL>=0?'+':'') + (brokerIsARS ? $a(pnlARS) : $u(totPnL));
+  // Para brokers ARS usamos los pesos históricos (lo que efectivamente pagaste)
+  // para el Costo Base, P&L y ROE — sino el peso devaluado distorsiona todo.
+  const totCostDisplay = brokerIsARS ? $a(costARSNative) : $u(totCost);
+  const pnlForDisplay  = brokerIsARS ? pnlARSNative : totPnL;
+  const totPnLDisplay  = (pnlForDisplay>=0?'+':'') + (brokerIsARS ? $a(pnlARSNative) : $u(totPnL));
+  // ROE final según moneda del broker
+  const roe = brokerIsARS ? roeARS : roeUSD;
   // ¿El broker es 100% liquidez? (caja fuerte, cuenta bancaria, billetera, etc.)
   // En ese caso no tiene sentido mostrar Costo / P&L / ROE — todo es cash 1:1.
   const onlyCash = pf.length > 0 && pf.every(a => isCash(a.ticker));
@@ -2161,7 +2173,7 @@ function showBrokerDetail(name){
     : [
         {l:'Valor Total',v:totValDisplay,c:roe>=0?'var(--blue)':'var(--txt)'},
         {l:'Costo Base',v:totCostDisplay,c:'var(--txt)'},
-        {l:'P&L',v:totPnLDisplay,c:totPnL>=0?'var(--green)':'var(--red)'},
+        {l:'P&L',v:totPnLDisplay,c:pnlForDisplay>=0?'var(--green)':'var(--red)'},
         {l:'ROE',v:(roe>=0?'+':'')+n2(roe,2)+'%',c:roe>=0?'var(--green)':'var(--red)'},
       ];
   kpiDefs.forEach(k=>{
