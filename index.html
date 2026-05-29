@@ -9,6 +9,8 @@
 <link rel="apple-touch-icon" href="logo.png">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Tesseract.js cargado de forma lazy solo cuando el usuario usa la foto OCR -->
+<script>window.TESSERACT_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#f5f7fa;color:#1a2740;font-family:-apple-system,'Segoe UI',sans-serif;font-size:14px}
@@ -198,6 +200,13 @@ body.dark .order-filters input,body.dark .order-filters select{background:#11182
   padding:13px;margin-bottom:12px;box-shadow:0 1px 3px #1565c008}
 .chart-box h3{font-size:10px;color:var(--muted);text-transform:uppercase;
   letter-spacing:1px;font-weight:700;margin-bottom:10px}
+.watch-tab{background:none;border:none;cursor:pointer;padding:6px 12px;
+  font-size:12px;color:var(--muted);font-weight:600;border-bottom:2px solid transparent;
+  transition:all 0.15s}
+.watch-tab:hover{color:var(--blue)}
+.watch-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+body.dark .watch-tab{color:#7a95c0}
+body.dark .watch-tab.active{color:#90caf9;border-bottom-color:#90caf9}
 .rng-btn{background:none;border:1px solid var(--blueL);color:var(--muted);
   font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-weight:600;
   transition:all 0.15s}
@@ -376,6 +385,7 @@ body.dark #auth-welcome h2{color:#90caf9}
     </div>
     <button class="tab" onclick="goTab('charts',this)">Gráficas</button>
     <button class="tab" onclick="goTab('dividends',this)">💰 Dividendos</button>
+    <button class="tab" onclick="goTab('watchlist',this)">👁 Seguimiento</button>
   </div>
 </div>
 <!-- BODY -->
@@ -545,6 +555,38 @@ body.dark #auth-welcome h2{color:#90caf9}
         </div>
       </div>
     </div>
+    <!-- WATCHLIST -->
+    <div class="page" id="page-watchlist">
+      <div class="sec-hdr">
+        <span class="sec-title">👁 SEGUIMIENTO</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-green" style="padding:4px 10px;font-size:11px" onclick="openOverlay('addWatch')">+ Agregar activos</button>
+          <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="refreshWatchlist()">↻ Actualizar precios</button>
+        </div>
+      </div>
+      <div id="watchlistInfo" style="font-size:11px;color:var(--muted);margin-bottom:8px">Activos que querés monitorear pero no tenés en cartera. Click en el ticker para ver fundamentales.</div>
+      <div class="chart-box">
+        <div style="overflow-x:auto">
+          <table id="watchlistTable" style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:2px solid var(--blueL);text-align:left">
+                <th style="padding:8px">Activo</th>
+                <th style="padding:8px">Tipo</th>
+                <th style="padding:8px;text-align:right">Precio</th>
+                <th style="padding:8px;text-align:right">1D</th>
+                <th style="padding:8px;text-align:right">7D</th>
+                <th style="padding:8px;text-align:right">1M</th>
+                <th style="padding:8px;text-align:right">6M</th>
+                <th style="padding:8px;text-align:right">1A</th>
+                <th style="padding:8px;text-align:right">3A</th>
+                <th style="padding:8px"></th>
+              </tr>
+            </thead>
+            <tbody id="watchlistTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div><!-- /main -->
   <!-- SIDEBAR -->
   <div class="sidebar">
@@ -578,6 +620,109 @@ body.dark #auth-welcome h2{color:#90caf9}
     </div>
   </div>
 </div><!-- /body-wrap -->
+<!-- ADD TO WATCHLIST OVERLAY -->
+<div class="overlay" id="overlay-addWatch">
+<div class="modal" style="max-width:600px;max-height:92vh;overflow-y:auto">
+  <div class="modal-hdr">
+    <h2>👁 Agregar a seguimiento</h2>
+    <button class="modal-x" onclick="closeOverlay('addWatch')">×</button>
+  </div>
+  <!-- Sub-tabs para método de carga -->
+  <div style="display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid var(--blueL);padding-bottom:8px;flex-wrap:wrap">
+    <button class="watch-tab active" data-method="manual" onclick="switchAddWatchTab('manual')">🔍 Buscar</button>
+    <button class="watch-tab" data-method="paste" onclick="switchAddWatchTab('paste')">📋 Pegar lista</button>
+    <button class="watch-tab" data-method="csv" onclick="switchAddWatchTab('csv')">📁 CSV</button>
+    <button class="watch-tab" data-method="photo" onclick="switchAddWatchTab('photo')">📷 Foto (OCR)</button>
+  </div>
+  <!-- Método 1: Manual -->
+  <div id="addWatchManual" class="addWatchPane">
+    <div class="field"><label>Tipo de activo</label>
+      <select id="watchType">
+        <option value="usa">Acción USA / ETF</option>
+        <option value="cedear">CEDEAR</option>
+        <option value="arg">Acción Argentina</option>
+        <option value="cripto">Cripto</option>
+        <option value="bono">Bono / Renta Fija</option>
+      </select>
+    </div>
+    <div class="field"><label>Ticker</label>
+      <div class="ac-wrap">
+        <input id="watchTicker" placeholder="Escribí para buscar..." autocomplete="off"
+          oninput="onWatchTickerInput(this.value)"
+          onblur="setTimeout(hideWatchAC,200)">
+        <div class="ac-list" id="watchAcList"></div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-green" onclick="addManualWatch()">Agregar</button>
+      <button class="btn btn-ghost" onclick="closeOverlay('addWatch')">Cancelar</button>
+    </div>
+  </div>
+  <!-- Método 2: Pegar -->
+  <div id="addWatchPaste" class="addWatchPane" style="display:none">
+    <div class="field"><label>Tipo de activo (para todos los tickers pegados)</label>
+      <select id="watchPasteType">
+        <option value="usa">Acción USA / ETF</option>
+        <option value="cedear">CEDEAR</option>
+        <option value="arg">Acción Argentina</option>
+        <option value="cripto">Cripto</option>
+        <option value="bono">Bono / Renta Fija</option>
+      </select>
+    </div>
+    <div class="field"><label>Tickers (separados por espacio, coma o enter)</label>
+      <textarea id="watchPasteText" rows="6" placeholder="AAPL, MSFT, GOOGL&#10;NVDA TSLA META&#10;AMZN" style="width:100%;padding:8px;border:1px solid var(--blueL);border-radius:6px;font-family:monospace;font-size:13px;background:var(--card);color:var(--txt);resize:vertical"></textarea>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-green" onclick="addPasteWatch()">Agregar todos</button>
+      <button class="btn btn-ghost" onclick="closeOverlay('addWatch')">Cancelar</button>
+    </div>
+  </div>
+  <!-- Método 3: CSV -->
+  <div id="addWatchCsv" class="addWatchPane" style="display:none">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+      Subí un archivo CSV con dos columnas: <code>ticker,tipo</code>. Tipos válidos: <code>usa</code>, <code>cedear</code>, <code>arg</code>, <code>cripto</code>, <code>bono</code>.<br>
+      Ejemplo:<br>
+      <code style="display:block;padding:6px;background:var(--blueLL);border-radius:4px;margin-top:4px">AAPL,usa<br>BTC,cripto<br>GGAL,cedear</code>
+    </div>
+    <div class="field"><label>Archivo CSV</label>
+      <input id="watchCsvFile" type="file" accept=".csv,text/csv" style="font-size:12px">
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-green" onclick="addCsvWatch()">Importar</button>
+      <button class="btn btn-ghost" onclick="closeOverlay('addWatch')">Cancelar</button>
+    </div>
+  </div>
+  <!-- Método 4: Foto OCR -->
+  <div id="addWatchPhoto" class="addWatchPane" style="display:none">
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">
+      Subí una foto/captura con tickers (ej: screenshot de tu broker). La app va a tratar de extraer los tickers automáticamente con OCR.
+      <br><span style="color:var(--gold)">⚠️ Funciona mejor con texto claro en alto contraste. Puede tardar 5-10 segundos.</span>
+    </div>
+    <div class="field"><label>Tipo de activo (para los tickers extraídos)</label>
+      <select id="watchPhotoType">
+        <option value="usa">Acción USA / ETF</option>
+        <option value="cedear">CEDEAR</option>
+        <option value="arg">Acción Argentina</option>
+        <option value="cripto">Cripto</option>
+        <option value="bono">Bono / Renta Fija</option>
+      </select>
+    </div>
+    <div class="field"><label>Foto / captura</label>
+      <input id="watchPhotoFile" type="file" accept="image/*" onchange="ocrPhoto(event)" style="font-size:12px">
+    </div>
+    <div id="watchOcrProgress" style="display:none;padding:10px;background:var(--blueLL);border-radius:6px;font-size:11px;color:var(--blue);margin-bottom:10px"></div>
+    <div id="watchOcrResults" style="display:none">
+      <div class="field"><label>Tickers detectados (editá si hace falta)</label>
+        <textarea id="watchOcrTickers" rows="4" style="width:100%;padding:8px;border:1px solid var(--blueL);border-radius:6px;font-family:monospace;font-size:13px;background:var(--card);color:var(--txt);resize:vertical"></textarea>
+      </div>
+      <div class="modal-btns">
+        <button class="btn btn-green" onclick="confirmOcrWatch()">Agregar estos</button>
+        <button class="btn btn-ghost" onclick="closeOverlay('addWatch')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
 <!-- PIE CHART EXPANDED OVERLAY -->
 <div class="overlay" id="overlay-pie">
 <div class="modal" style="max-width:900px;max-height:92vh;overflow-y:auto">
@@ -1012,6 +1157,9 @@ async function supaLoad(){
       .eq('user_id', currentUser.id).single();
     if(set){
       if(set.brokers) brokers = set.brokers;
+      if(Array.isArray(set.watchlist)) watchlist = set.watchlist;
+      else watchlist = [];
+      if(set.broker_currency && typeof set.broker_currency === 'object') brokerCurrencyPrefs = set.broker_currency;
       if(set.portfolio_name){
         localStorage.setItem('pf6_name', set.portfolio_name);
         document.getElementById('pfName').textContent = set.portfolio_name;
@@ -1039,6 +1187,8 @@ async function supaSync(){
       user_id: currentUser.id,
       brokers,
       portfolio_name: localStorage.getItem('pf6_name') || 'Mi Portfolio',
+      watchlist,
+      broker_currency: brokerCurrencyPrefs,
       updated_at: new Date().toISOString()
     }, {onConflict:'user_id'});
   }catch(e){ console.log('Sync error:', e); }
@@ -1889,6 +2039,297 @@ function refreshFilterBrokerDropdown(){
   sel.innerHTML = '<option value="">Todos los brokers</option>';
   brokers.forEach(b => sel.innerHTML += `<option value="${b}" ${b===current?'selected':''}>${b}</option>`);
 }
+// ═══════════════════════════════════════════════════════════════════════════
+// WATCHLIST (Seguimiento)
+// ═══════════════════════════════════════════════════════════════════════════
+let watchlist = JSON.parse(localStorage.getItem('pf6_watchlist') || '[]');
+let _watchPrices = JSON.parse(localStorage.getItem('pf6_watchPrices') || '{}'); // {ticker: {price, ts, returns}}
+
+function saveWatchlist(){
+  localStorage.setItem('pf6_watchlist', JSON.stringify(watchlist));
+  if(currentUser) supaSync();
+}
+
+// Calcula return % entre el precio "actual" (último) y el precio N días atrás.
+function calcReturn(closes, dates, daysAgo){
+  if(!closes || closes.length < 2) return null;
+  const last = closes[closes.length-1];
+  if(!last) return null;
+  // Buscar precio N días atrás (aproximado: ~daysAgo*0.7 trading days)
+  const tradingDays = Math.round(daysAgo * 0.69);
+  const idx = Math.max(0, closes.length - 1 - tradingDays);
+  const old = closes[idx];
+  if(!old || old <= 0) return null;
+  return (last - old) / old * 100;
+}
+
+// Fetch precio + histórico (3y) de Yahoo en una sola llamada → calcula todos los returns.
+async function fetchWatchHistory(ticker, type){
+  const symbol = yahooSymbolFor(ticker, type);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=3y&interval=1d`;
+  const proxies = [
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  ];
+  for(const proxy of proxies){
+    try{
+      const r = await fetch(proxy(url));
+      if(!r.ok) continue;
+      const d = await r.json();
+      const res = d?.chart?.result?.[0];
+      if(!res) continue;
+      const closes = (res.indicators?.quote?.[0]?.close || []).filter(x => typeof x === 'number');
+      if(closes.length < 2) continue;
+      const meta = res.meta || {};
+      const currency = meta.currency || 'USD';
+      const exchange = meta.exchangeName || '';
+      const symbolOut = meta.symbol || symbol;
+      const lastPrice = closes[closes.length-1];
+      const prevClose = closes[closes.length-2];
+      return {
+        symbol: symbolOut,
+        price: lastPrice,
+        currency,
+        exchange,
+        returns: {
+          d1: prevClose ? (lastPrice - prevClose) / prevClose * 100 : null,
+          d7: calcReturn(closes, null, 7),
+          m1: calcReturn(closes, null, 30),
+          m6: calcReturn(closes, null, 180),
+          y1: calcReturn(closes, null, 365),
+          y3: calcReturn(closes, null, 365*3),
+        }
+      };
+    } catch(e){}
+  }
+  return null;
+}
+
+async function refreshWatchlist(){
+  if(!watchlist.length) return;
+  setStatus(`Actualizando watchlist (0/${watchlist.length})...`, true);
+  let done = 0;
+  const CONC = 4;
+  let cursor = 0;
+  await Promise.all(Array(CONC).fill(0).map(async () => {
+    while(true){
+      const idx = cursor++;
+      if(idx >= watchlist.length) break;
+      const w = watchlist[idx];
+      try{
+        const data = await fetchWatchHistory(w.ticker, w.type);
+        if(data){
+          _watchPrices[w.ticker+'_'+w.type] = { ...data, ts: Date.now() };
+        }
+      } catch(e){}
+      done++;
+      if(done % 2 === 0 || done === watchlist.length){
+        setStatus(`Actualizando watchlist (${done}/${watchlist.length})...`, true);
+      }
+    }
+  }));
+  localStorage.setItem('pf6_watchPrices', JSON.stringify(_watchPrices));
+  setStatus(`✓ Watchlist actualizado (${done} activos)`, false);
+  renderWatchlist();
+}
+
+function renderWatchlist(){
+  const tbody = el('watchlistTbody');
+  if(!tbody) return;
+  if(!watchlist.length){
+    tbody.innerHTML = `<tr><td colspan="10" style="padding:30px;text-align:center;color:var(--muted)">
+      Sin activos en seguimiento. Apretá <strong>"+ Agregar activos"</strong> arriba para empezar.
+    </td></tr>`;
+    return;
+  }
+  const fmtRet = (r) => {
+    if(r == null) return '<span style="color:var(--muted)">—</span>';
+    const cls = r >= 0 ? 'up' : 'dn';
+    const sign = r >= 0 ? '+' : '';
+    return `<span class="${cls}">${sign}${n2(r,2)}%</span>`;
+  };
+  tbody.innerHTML = watchlist.map(w => {
+    const cached = _watchPrices[w.ticker+'_'+w.type];
+    const px = cached?.price;
+    const ret = cached?.returns || {};
+    const typeLabel = {usa:'USA',cedear:'CEDEAR',arg:'Argentina',cripto:'Cripto',bono:'Bono'}[w.type] || w.type;
+    return `<tr style="border-bottom:1px solid var(--blueL)">
+      <td style="padding:6px 8px;font-weight:600;color:var(--blue);cursor:pointer" onclick="openFundamentals('${w.ticker}','${typeLabel}')">${w.ticker}</td>
+      <td style="padding:6px 8px;font-size:11px;color:var(--muted)">${typeLabel}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:600">${px != null ? '$'+n2(px,2) : '—'}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.d1)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.d7)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.m1)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.m6)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.y1)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.y3)}</td>
+      <td style="padding:6px 8px;text-align:right">
+        <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px" onclick="removeFromWatchlist('${w.ticker}','${w.type}')" title="Quitar del seguimiento">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function removeFromWatchlist(ticker, type){
+  if(!confirm(`¿Quitar ${ticker} del seguimiento?`)) return;
+  watchlist = watchlist.filter(w => !(w.ticker === ticker && w.type === type));
+  saveWatchlist();
+  renderWatchlist();
+}
+
+// === Modal de agregar ===
+function switchAddWatchTab(method){
+  document.querySelectorAll('.watch-tab').forEach(t => t.classList.toggle('active', t.dataset.method === method));
+  document.querySelectorAll('.addWatchPane').forEach(p => p.style.display = 'none');
+  const paneMap = {manual:'addWatchManual',paste:'addWatchPaste',csv:'addWatchCsv',photo:'addWatchPhoto'};
+  el(paneMap[method]).style.display = 'block';
+}
+
+function addWatchItem(ticker, type){
+  const t = (ticker||'').trim().toUpperCase();
+  if(!t) return false;
+  if(watchlist.some(w => w.ticker === t && w.type === type)) return false; // ya existe
+  watchlist.push({ ticker: t, type, addedAt: Date.now() });
+  return true;
+}
+
+function addManualWatch(){
+  const ticker = el('watchTicker').value;
+  const type = el('watchType').value;
+  if(!ticker.trim()){ alert('Escribí un ticker'); return; }
+  const added = addWatchItem(ticker, type);
+  if(!added){ alert(`${ticker.toUpperCase()} ya está en seguimiento`); return; }
+  saveWatchlist();
+  el('watchTicker').value = '';
+  closeOverlay('addWatch');
+  renderWatchlist();
+  refreshWatchlist();
+}
+
+function addPasteWatch(){
+  const text = el('watchPasteText').value || '';
+  const type = el('watchPasteType').value;
+  const tickers = text.split(/[\s,;\n]+/).map(t => t.trim().toUpperCase()).filter(Boolean);
+  if(!tickers.length){ alert('No detecté ningún ticker'); return; }
+  let added = 0, skipped = 0;
+  tickers.forEach(t => { if(addWatchItem(t, type)) added++; else skipped++; });
+  saveWatchlist();
+  el('watchPasteText').value = '';
+  closeOverlay('addWatch');
+  alert(`✓ ${added} agregado${added!==1?'s':''}` + (skipped ? `, ${skipped} ya estaban en la lista.` : ''));
+  renderWatchlist();
+  refreshWatchlist();
+}
+
+function addCsvWatch(){
+  const file = el('watchCsvFile').files[0];
+  if(!file){ alert('Elegí un archivo CSV'); return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean);
+    let added = 0, skipped = 0;
+    lines.forEach(line => {
+      const parts = line.split(/[,;\t]/).map(p => p.trim());
+      if(!parts[0]) return;
+      const ticker = parts[0].toUpperCase();
+      // Skip header row if first column looks like "ticker"
+      if(ticker === 'TICKER' || ticker === 'SYMBOL') return;
+      const typeRaw = (parts[1] || 'usa').toLowerCase();
+      const validTypes = ['usa','cedear','arg','cripto','bono'];
+      const type = validTypes.includes(typeRaw) ? typeRaw : 'usa';
+      if(addWatchItem(ticker, type)) added++; else skipped++;
+    });
+    saveWatchlist();
+    closeOverlay('addWatch');
+    alert(`✓ ${added} agregado${added!==1?'s':''} desde CSV` + (skipped ? `, ${skipped} duplicados omitidos.` : ''));
+    renderWatchlist();
+    refreshWatchlist();
+  };
+  reader.readAsText(file);
+}
+
+// OCR con Tesseract.js (carga lazy)
+let _tesseractLoaded = false;
+function loadTesseract(){
+  return new Promise((resolve, reject) => {
+    if(_tesseractLoaded || window.Tesseract){ _tesseractLoaded = true; resolve(); return; }
+    const s = document.createElement('script');
+    s.src = window.TESSERACT_CDN;
+    s.onload = () => { _tesseractLoaded = true; resolve(); };
+    s.onerror = () => reject(new Error('No se pudo cargar Tesseract.js'));
+    document.head.appendChild(s);
+  });
+}
+
+async function ocrPhoto(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const progressEl = el('watchOcrProgress');
+  const resultsEl = el('watchOcrResults');
+  resultsEl.style.display = 'none';
+  progressEl.style.display = 'block';
+  progressEl.textContent = '⌛ Cargando OCR engine (primera vez tarda ~5 segundos)...';
+  try{
+    await loadTesseract();
+    progressEl.textContent = '⌛ Analizando imagen...';
+    const { data: { text } } = await Tesseract.recognize(file, 'eng', {
+      logger: m => {
+        if(m.status === 'recognizing text'){
+          progressEl.textContent = `⌛ Reconociendo texto... ${Math.round((m.progress||0)*100)}%`;
+        }
+      }
+    });
+    // Extraer posibles tickers: secuencias de 2-6 letras mayúsculas, posiblemente con punto
+    const candidates = [...new Set((text.match(/\b[A-Z]{2,6}(?:\.[A-Z]{1,3})?\b/g) || []))];
+    // Filtrar palabras comunes que no son tickers
+    const stopwords = new Set(['ARS','USD','THE','AND','FOR','YOU','WITH','THIS','THAT','HAS','ETF','LTD','SA','SL','EUR','GBP','PRO','APP','NEW','OLD','BUY','SELL','TIENE','TOTAL','HOY','MAX','MIN','VAR','PCT','CCL','MEP','PER','EPS','PNL','ROE','ROA','PPC','API','CSV','PDF','OCR']);
+    const tickers = candidates.filter(t => !stopwords.has(t) && t.length >= 2);
+    progressEl.style.display = 'none';
+    if(!tickers.length){
+      alert('No se detectaron tickers en la imagen. Probá con una imagen más clara.');
+      return;
+    }
+    el('watchOcrTickers').value = tickers.join(', ');
+    resultsEl.style.display = 'block';
+  } catch(e){
+    progressEl.style.display = 'none';
+    alert('Error en OCR: ' + e.message);
+  }
+}
+
+function confirmOcrWatch(){
+  const text = el('watchOcrTickers').value || '';
+  const type = el('watchPhotoType').value;
+  const tickers = text.split(/[\s,;\n]+/).map(t => t.trim().toUpperCase()).filter(Boolean);
+  if(!tickers.length){ alert('No hay tickers para agregar'); return; }
+  let added = 0, skipped = 0;
+  tickers.forEach(t => { if(addWatchItem(t, type)) added++; else skipped++; });
+  saveWatchlist();
+  el('watchOcrTickers').value = '';
+  el('watchOcrResults').style.display = 'none';
+  el('watchPhotoFile').value = '';
+  closeOverlay('addWatch');
+  alert(`✓ ${added} agregado${added!==1?'s':''} desde la foto` + (skipped ? `, ${skipped} ya estaban.` : ''));
+  renderWatchlist();
+  refreshWatchlist();
+}
+
+// Autocomplete para el método manual
+function onWatchTickerInput(val){
+  const mktVal = el('watchType').value;
+  const list = TICKERS[mktVal] || TICKERS.usa || [];
+  const q = val.toUpperCase();
+  if(!q){ hideWatchAC(); return; }
+  const matches = list.filter(s => s.t.startsWith(q) || s.n.toUpperCase().includes(q)).slice(0, 8);
+  const box = el('watchAcList');
+  if(!matches.length){ hideWatchAC(); return; }
+  box.style.display = 'block';
+  box.innerHTML = matches.map(s => `<div class="ac-item" onmousedown="pickWatchTicker('${s.t}')"><strong>${s.t}</strong><span>${s.n}</span></div>`).join('');
+}
+function pickWatchTicker(t){ el('watchTicker').value = t; hideWatchAC(); }
+function hideWatchAC(){ const box = el('watchAcList'); if(box) box.style.display = 'none'; }
+
 // ═══════════════════════════════════════════════════════════════════════════
 // DIVIDENDS PAGE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3610,6 +4051,14 @@ function goTab(name,btn){
   if(name==='brokers') hideBrokerDetail();
   if(name==='charts') renderMainCharts(enrich(getPortfolio()),0,0,0,ccl());
   if(name==='dividends') renderDividends();
+  if(name==='watchlist'){
+    renderWatchlist();
+    // Refresh automático si los precios cacheados son viejos (> 30 min)
+    const oldestTs = Math.min(...watchlist.map(w => _watchPrices[w.ticker+'_'+w.type]?.ts || 0));
+    if(watchlist.length && (oldestTs === 0 || Date.now() - oldestTs > 30*60*1000)){
+      refreshWatchlist();
+    }
+  }
 }
 
 // Dropdown de brokers en la barra de pestañas
