@@ -2035,7 +2035,14 @@ async function cleanupRetroactiveDividends(){
 function renderOrders(){
   refreshFilterBrokerDropdown();
   const el2=el('orderList');
-  const all = [...orders].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  // Orden cronológico estricto: por fecha descendente, y dentro del mismo día
+  // por el id (timestamp de creación) para mantener orden consistente.
+  const all = [...orders].sort((a,b) => {
+    const da = a.date || '';
+    const db = b.date || '';
+    if(da !== db) return db.localeCompare(da); // más reciente primero
+    return (b.id||0) - (a.id||0);
+  });
   const filtered = all.filter(passesFilters);
   // Mostrar contador de filtros activos
   const countEl = el('orderCount');
@@ -2066,10 +2073,17 @@ function renderOrders(){
     const totalDisp = isOrdARS ? $a(totalUSD * cclForOrd) : $u(totalUSD);
     const totalEquiv = isOrdARS ? `≈ ${$u(totalUSD)}` : `≈ ${$a(totalUSD * cclForOrd)}`;
     const lbl = o.expense ? '💸 Gasto' : (o.dividend ? `💰 Div ${o.dividendTicker||''}` : o.action);
+    // Hora extraída del id (timestamp de cuando se cargó la orden).
+    // Para órdenes viejas/importadas que no tienen id timestamp, omitimos la hora.
+    let timeStr = '';
+    if(o.id && o.id > 1e12){ // id es un timestamp ms si > año 2001
+      const d = new Date(o.id);
+      timeStr = ' ' + d.toTimeString().slice(0,5); // HH:MM
+    }
     div.innerHTML=`<div class="ord-row">
       <div class="ord-left">
         <span class="ord-badge ${o.action==='Compra'?'buy':'sell'}">${lbl}</span>
-        <div><strong style="color:var(--blue)">${o.ticker}</strong><div class="ord-meta">${o.date}${o.broker?' · '+o.broker:''}${o.currency==='ARS'?' · ARS':' · USD'}</div></div>
+        <div><strong style="color:var(--blue)">${o.ticker}</strong><div class="ord-meta">${o.date}${timeStr}${o.broker?' · '+o.broker:''}${o.currency==='ARS'?' · ARS':' · USD'}</div></div>
       </div>
       <div style="text-align:right;font-size:12px">
         <div style="font-family:monospace;font-weight:600">${fmtQty(o.qty,o.type)} × ${isOrdARS?$a(o.priceOrig||o.price*cclForOrd):$u(o.price)}</div>
