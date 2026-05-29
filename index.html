@@ -513,6 +513,31 @@ body.dark #auth-welcome h2{color:#90caf9}
       <div id="divTrackingInfo" style="font-size:11px;color:var(--muted);margin-bottom:8px"></div>
       <!-- KPIs -->
       <div class="kpi-row" id="divKpiRow" style="margin-bottom:14px"></div>
+      <!-- Próximos dividendos predichos -->
+      <div class="chart-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+          <h3 style="margin:0">📅 Próximos pagos (predichos a 3 meses)</h3>
+          <button class="btn btn-ghost" style="padding:3px 8px;font-size:10px" onclick="scanUpcomingDividends()">↻ Recalcular</button>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin:0 0 8px 0">Predicción basada en la frecuencia histórica de cada activo. Aproximado — las empresas pueden cambiar montos, fechas o suspender pagos.</p>
+        <div style="overflow-x:auto">
+          <table id="divUpcomingTable" style="width:100%;font-size:12px;border-collapse:collapse">
+            <thead>
+              <tr style="border-bottom:2px solid var(--blueL);text-align:left">
+                <th style="padding:8px">Fecha estimada</th>
+                <th style="padding:8px">Activo</th>
+                <th style="padding:8px">Broker</th>
+                <th style="padding:8px;text-align:right">Cant.</th>
+                <th style="padding:8px;text-align:right">$/acción est.</th>
+                <th style="padding:8px;text-align:right">Bruto est.</th>
+                <th style="padding:8px;text-align:right">Neto est.</th>
+                <th style="padding:8px;text-align:center">Frecuencia</th>
+              </tr>
+            </thead>
+            <tbody id="divUpcomingTbody"><tr><td colspan="8" style="padding:20px;text-align:center;color:var(--muted)">Apretá "↻ Recalcular" para detectar próximos pagos.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
       <!-- Totales por activo -->
       <div class="chart-box">
         <h3>Total por activo</h3>
@@ -590,8 +615,8 @@ body.dark #auth-welcome h2{color:#90caf9}
   </div><!-- /main -->
   <!-- SIDEBAR -->
   <div class="sidebar">
-    <div class="side-box" id="liquidezSummaryBox" style="display:none">
-      <div class="side-hdr">💰 Liquidez Total</div>
+    <div class="side-box" id="liquidezSummaryBox" style="display:none;cursor:pointer" title="Click para ver desglose por broker" onclick="openLiquidezModal()">
+      <div class="side-hdr">💰 Liquidez Total <span style="font-size:9px;font-weight:400;color:var(--muted)">(click para detalle)</span></div>
       <div style="padding:10px 12px;display:flex;gap:8px;flex-wrap:wrap">
         <div style="flex:1;min-width:80px;background:var(--blueLL);border-radius:8px;padding:8px 10px">
           <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Pesos</div>
@@ -620,6 +645,17 @@ body.dark #auth-welcome h2{color:#90caf9}
     </div>
   </div>
 </div><!-- /body-wrap -->
+<!-- LIQUIDEZ DETAIL OVERLAY -->
+<div class="overlay" id="overlay-liquidez">
+<div class="modal" style="max-width:680px;max-height:92vh;overflow-y:auto">
+  <div class="modal-hdr">
+    <h2>💰 Liquidez por Broker</h2>
+    <button class="modal-x" onclick="closeOverlay('liquidez')">×</button>
+  </div>
+  <div id="liquidezTotalSummary" style="margin-bottom:14px"></div>
+  <div id="liquidezByBroker"></div>
+</div>
+</div>
 <!-- ADD TO WATCHLIST OVERLAY -->
 <div class="overlay" id="overlay-addWatch">
 <div class="modal" style="max-width:600px;max-height:92vh;overflow-y:auto">
@@ -2434,6 +2470,106 @@ function deleteDividend(id){
   renderDividends();
 }
 
+// Detecta frecuencia (días entre pagos) y proyecta los próximos 3 meses.
+async function scanUpcomingDividends(){
+  const pf = getPortfolio();
+  const eligible = pf.filter(a => !isCash(a.ticker) && a.type !== 'Cripto');
+  if(!eligible.length){
+    el('divUpcomingTbody').innerHTML = '<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--muted)">Sin activos en cartera elegibles para dividendos.</td></tr>';
+    return;
+  }
+  setStatus(`Analizando frecuencia de dividendos (0/${eligible.length})...`, true);
+  const upcoming = [];
+  const now = new Date();
+  const threeMonthsFromNow = new Date(now.getFullYear(), now.getMonth()+3, now.getDate());
+  let done = 0;
+  // Paralelizar
+  const CONC = 4;
+  let cursor = 0;
+  await Promise.all(Array(CONC).fill(0).map(async () => {
+    while(true){
+      const idx = cursor++;
+      if(idx >= eligible.length) break;
+      const a = eligible[idx];
+      try{
+        const symbol = yahooSymbolFor(a.ticker, a.type);
+        const divs = await fetchDividends(symbol, 3); // últimos 3 años
+        if(!divs || divs.length < 2){ done++; continue; }
+        // Calcular frecuencia media (días entre últimos 4 pagos)
+        const recent = divs.slice(-4);
+        const intervals = [];
+        for(let i = 1; i < recent.length; i++){
+          const d1 = new Date(recent[i-1].date);
+          const d2 = new Date(recent[i].date);
+          intervals.push((d2-d1) / (24*60*60*1000));
+        }
+        if(!intervals.length){ done++; continue; }
+        const avgInterval = intervals.reduce((s,x)=>s+x,0) / intervals.length;
+        // Clasificar frecuencia
+        let freqLabel = 'Anual';
+        if(avgInterval < 100) freqLabel = 'Trimestral';
+        else if(avgInterval < 200) freqLabel = 'Semestral';
+        // Último monto pagado por acción
+        const lastAmount = divs[divs.length-1].amount;
+        // Brokers donde tiene este ticker
+        const brokerList = [...new Set(orders
+          .filter(o => o.ticker === a.ticker && o.broker && !o.dividend && !o.expense)
+          .map(o => o.broker))];
+        for(const brk of brokerList){
+          const qtyHeld = qtyAtDate(a.ticker, brk, now.toISOString().slice(0,10));
+          if(qtyHeld <= 0) continue;
+          // Proyectar próximos pagos a 3 meses
+          let nextDate = new Date(divs[divs.length-1].date);
+          // Avanzar hasta que el próximo sea en el futuro
+          while(nextDate <= now){
+            nextDate = new Date(nextDate.getTime() + avgInterval*24*60*60*1000);
+          }
+          while(nextDate <= threeMonthsFromNow){
+            const grossUSD = qtyHeld * lastAmount;
+            const taxRate = getDividendTaxRate(a.type, brk);
+            const netUSD = grossUSD * (1 - taxRate);
+            upcoming.push({
+              date: nextDate.toISOString().slice(0,10),
+              ticker: a.ticker,
+              type: a.type,
+              broker: brk,
+              qty: qtyHeld,
+              perShare: lastAmount,
+              grossUSD, netUSD,
+              taxRate,
+              freq: freqLabel,
+            });
+            nextDate = new Date(nextDate.getTime() + avgInterval*24*60*60*1000);
+          }
+        }
+      } catch(e){ console.warn('Upcoming div error', a.ticker, e); }
+      done++;
+      if(done % 3 === 0 || done === eligible.length){
+        setStatus(`Analizando frecuencia (${done}/${eligible.length})...`, true);
+      }
+    }
+  }));
+  upcoming.sort((a,b)=>a.date.localeCompare(b.date));
+  const tbody = el('divUpcomingTbody');
+  if(!upcoming.length){
+    tbody.innerHTML = '<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--muted)">No se proyectan pagos en los próximos 3 meses.</td></tr>';
+  } else {
+    tbody.innerHTML = upcoming.map(u => `<tr style="border-bottom:1px solid var(--blueL)">
+      <td style="padding:6px 8px;font-family:monospace;font-weight:600">${u.date}</td>
+      <td style="padding:6px 8px;font-weight:600;color:var(--blue);cursor:pointer" onclick="openFundamentals('${u.ticker}','${u.type}')">${u.ticker}</td>
+      <td style="padding:6px 8px;font-size:11px">${u.broker}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtQty(u.qty,u.type)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">$${n2(u.perShare,4)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">${$u(u.grossUSD)}</td>
+      <td class="up" style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700">${$u(u.netUSD)}</td>
+      <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--muted)">${u.freq}</td>
+    </tr>`).join('');
+  }
+  const totalGross = upcoming.reduce((s,u)=>s+u.grossUSD,0);
+  const totalNet   = upcoming.reduce((s,u)=>s+u.netUSD,0);
+  setStatus(`✓ ${upcoming.length} pagos proyectados · Bruto ${$u(totalGross)} · Neto ${$u(totalNet)}`, false);
+}
+
 async function scanDividendsNow(){
   setStatus('Escaneando dividendos...', true);
   try{
@@ -3604,6 +3740,93 @@ function openFundamentals(ticker, type){
 // ═══════════════════════════════════════════════════════════════════════════
 let _pieBigChart = null;
 let _pieModalCtx = null; // contexto inicial pasado al abrir
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LIQUIDEZ POR BROKER MODAL
+// ═══════════════════════════════════════════════════════════════════════════
+function openLiquidezModal(){
+  const c = ccl();
+  // Calcular liquidez por broker
+  const byBroker = {};
+  orders.forEach(o => {
+    if(!isCash(o.ticker)) return;
+    const brk = o.broker || '— Sin broker —';
+    if(!byBroker[brk]) byBroker[brk] = {};
+    const t = o.ticker.toUpperCase();
+    if(!byBroker[brk][t]) byBroker[brk][t] = 0;
+    byBroker[brk][t] += (o.action === 'Compra' ? o.qty : -o.qty);
+  });
+  // Filtrar tickers con qty > 0 y brokers con al menos 1 ticker positivo
+  const cleanData = {};
+  Object.entries(byBroker).forEach(([brk, tickers]) => {
+    const positives = {};
+    Object.entries(tickers).forEach(([t, q]) => {
+      if(q > 0.001) positives[t] = q;
+    });
+    if(Object.keys(positives).length) cleanData[brk] = positives;
+  });
+  // Calcular totales globales (en USD)
+  let totalUSD = 0, totalARS = 0;
+  Object.values(cleanData).forEach(tickers => {
+    Object.entries(tickers).forEach(([t, q]) => {
+      if(t === 'ARS' || t === 'PESOS'){ totalARS += q; totalUSD += q/c; }
+      else { totalUSD += q; totalARS += q*c; }
+    });
+  });
+  // Render
+  el('liquidezTotalSummary').innerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px;background:var(--blueLL);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Total en USD</div>
+        <div style="font-size:22px;font-weight:800;color:var(--green);font-family:monospace;margin-top:4px">${$u(totalUSD)}</div>
+        <div style="font-size:10px;color:var(--muted)">≈ ${$a(totalARS)}</div>
+      </div>
+      <div style="flex:1;min-width:140px;background:var(--blueLL);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Total en ARS</div>
+        <div style="font-size:22px;font-weight:800;color:var(--gold);font-family:monospace;margin-top:4px">${$a(totalARS)}</div>
+        <div style="font-size:10px;color:var(--muted)">≈ ${$u(totalUSD)}</div>
+      </div>
+    </div>
+  `;
+  const brokersList = Object.keys(cleanData).sort((a, b) => {
+    // Ordenar por valor total USD descendente
+    const sumA = Object.entries(cleanData[a]).reduce((s,[t,q]) => s + (t==='ARS'||t==='PESOS' ? q/c : q), 0);
+    const sumB = Object.entries(cleanData[b]).reduce((s,[t,q]) => s + (t==='ARS'||t==='PESOS' ? q/c : q), 0);
+    return sumB - sumA;
+  });
+  if(!brokersList.length){
+    el('liquidezByBroker').innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Sin liquidez registrada en ningún broker.</div>';
+  } else {
+    el('liquidezByBroker').innerHTML = brokersList.map(brk => {
+      const logo = getBrokerLogo(brk);
+      const tickers = cleanData[brk];
+      const brokerCurr = getBrokerCurrency(brk);
+      const sumUSD = Object.entries(tickers).reduce((s,[t,q]) => s + (t==='ARS'||t==='PESOS' ? q/c : q), 0);
+      const sumARS = sumUSD * c;
+      const brokerTotal = brokerCurr === 'ARS' ? $a(sumARS) : $u(sumUSD);
+      const ccolor = brokerCurr === 'ARS' ? 'var(--gold)' : 'var(--green)';
+      const rows = Object.entries(tickers).sort(([,a],[,b]) => b-a).map(([t,q]) => {
+        const isArs = (t === 'ARS' || t === 'PESOS');
+        const qFmt = isArs ? $a(q) : (t === 'USD' || t === 'USDC' || t === 'BUSD' || t === 'DAI' ? $u(q) : n2(q,4));
+        const equivUSD = isArs ? `≈ ${$u(q/c)}` : '';
+        return `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px">
+          <span style="font-family:monospace;color:var(--blue)">${t}</span>
+          <span style="font-family:monospace;font-weight:600">${qFmt} ${isArs?'ARS':'USD'} <span style="color:var(--muted);font-size:10px;font-weight:400">${equivUSD}</span></span>
+        </div>`;
+      }).join('');
+      return `<div style="background:var(--card);border:1px solid var(--blueL);border-radius:8px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--blueLL)">
+          ${logo?`<img src="${logo}" style="width:20px;height:20px;border-radius:3px" onerror="this.style.display='none'">`:'<span style="width:20px"></span>'}
+          <div style="flex:1;font-weight:700;font-size:14px">${brk}</div>
+          <span style="font-size:9px;color:${ccolor};font-weight:600;border:1px solid ${ccolor};padding:1px 6px;border-radius:3px">${brokerCurr}</span>
+          <span style="font-family:monospace;font-weight:700;color:var(--blue)">${brokerTotal}</span>
+        </div>
+        ${rows}
+      </div>`;
+    }).join('');
+  }
+  openOverlay('liquidez');
+}
 
 function openPieModal(ctx){
   _pieModalCtx = ctx || {};
