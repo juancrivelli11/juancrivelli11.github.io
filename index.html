@@ -2153,11 +2153,23 @@ function showBrokerDetail(name){
     if((o.broker||'').toLowerCase().trim() !== (name||'').toLowerCase().trim()) return;
     if(!isCash(o.ticker)) return;
     if(o.dividend || o.auto) return;
-    const usdAmt = (o.qty || 0) * (o.price || 1);
+    // Filtrar también órdenes con notas auto-generadas (datos legacy pre-flag)
+    if((o.notes||'').startsWith('Auto:')) return;
+    // Determinamos el "valor nativo" de la orden según el TICKER, no el campo currency
+    // que en datos viejos podía estar mal seteado.
+    const tup = (o.ticker||'').toUpperCase();
+    const isArsTicker = (tup === 'ARS' || tup === 'PESOS');
     const cclOrd = o.cclAtOrder || c;
-    const arsAmt = (o.currency === 'ARS')
-      ? (o.qty || 0) * (o.priceOrig || 1)   // ya en pesos históricos
-      : usdAmt * cclOrd;                     // USD convertido al CCL del momento
+    let usdAmt, arsAmt;
+    if(isArsTicker){
+      // Compra de ARS: qty es directamente la cantidad de pesos
+      arsAmt = (o.qty || 0);
+      usdAmt = arsAmt / cclOrd;
+    } else {
+      // Cash USD/USDT/USDC/DAI/BUSD: qty es cantidad en dólares (1:1)
+      usdAmt = (o.qty || 0);
+      arsAmt = usdAmt * cclOrd;
+    }
     if(o.action === 'Compra'){
       netCapitalUSD += usdAmt;
       netCapitalARS += arsAmt;
@@ -2166,18 +2178,22 @@ function showBrokerDetail(name){
       netCapitalARS -= arsAmt;
     }
   });
-  // Valor actual del broker en su moneda nativa
-  const valueUSDForROE = pf.reduce((s,a) => s + (a.hasPx ? a.value : a.cost), 0);
+  // Valor actual del broker en su moneda nativa.
+  // Para cash usamos qty directo (no a.value que puede estar mal por bugs viejos).
+  const valueUSDForROE = pf.reduce((s,a) => {
+    const tup = (a.ticker||'').toUpperCase();
+    if(tup === 'ARS' || tup === 'PESOS') return s + a.qty / c; // ARS a USD
+    if(isCash(a.ticker)) return s + a.qty; // USD/USDT 1:1
+    return s + (a.hasPx ? a.value : a.cost);
+  }, 0);
   const valueARSForROE = pf.reduce((s,a) => {
-    const v = a.hasPx ? a.value : a.cost;
+    const tup = (a.ticker||'').toUpperCase();
+    if(tup === 'ARS' || tup === 'PESOS') return s + a.qty; // ya en ARS
+    if(isCash(a.ticker)) return s + a.qty * c; // USD/USDT a ARS
     // Para ARS-type assets: si hay precio, value*c da el valor en ARS actual; si no, costOrig.
-    // Para USD-type assets: valor USD * c (al CCL actual) o el cash USD en ARS al CCL actual.
-    if(isARS(a.type)) return s + (a.hasPx ? v*c : (a.costOrig||v*c));
-    if(isCash(a.ticker)){
-      // Cash USD/USDT/USDC se valoriza al CCL actual
-      return s + v*c;
-    }
-    return s + v*c; // USD assets en pesos
+    if(isARS(a.type)) return s + (a.hasPx ? a.value*c : (a.costOrig||a.cost*c));
+    // USD assets en pesos
+    return s + (a.hasPx ? a.value : a.cost) * c;
   }, 0);
   // True ROE
   const truePnLUSD = valueUSDForROE - netCapitalUSD;
@@ -3364,7 +3380,17 @@ function saveOrder(){
   }
   const mktVal=el('oMarket').value;
   const typeMap={usa:'Acción USA',cedear:'CEDEAR',arg:'Acción Argentina',cripto:'Cripto',bono:'Bono/Renta Fija',liquidez:'Acción USA'};
-  const type=(isVenta||isGasto)?(getPortfolio().find(a=>a.ticker===ticker)?.type||'Acción USA'):(typeMap[mktVal]||'Acción USA');
+  // Para "Liquidez": el tipo depende del ticker (ARS/PESOS → Acción Argentina, sino USA)
+  // así isARS() lo trata correctamente y el priceUSD/cost se guardan bien.
+  let type;
+  if(isVenta || isGasto){
+    type = getPortfolio().find(a=>a.ticker===ticker)?.type || 'Acción USA';
+  } else if(mktVal === 'liquidez'){
+    const tup = (ticker||'').toUpperCase();
+    type = (tup === 'ARS' || tup === 'PESOS') ? 'Acción Argentina' : 'Acción USA';
+  } else {
+    type = typeMap[mktVal] || 'Acción USA';
+  }
   // Gasto: si el ticker es ARS, la moneda es ARS; sino USD. Para ventas normales usa isARS(type).
   const isA = isGasto ? (ticker.toUpperCase()==='ARS' || ticker.toUpperCase()==='PESOS')
                       : isARS(type);
