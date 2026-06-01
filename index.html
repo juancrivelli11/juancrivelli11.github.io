@@ -4098,6 +4098,12 @@ function saveOrder(){
       const stQty = stOrds.reduce((s,o)=>s+(o.action==='Compra'?o.qty:-o.qty),0);
       if(stQty > 0){ liqTicker = st; break; }
     }
+    // Si es una VENTA y no hay liquidez existente, usar el ticker default del broker.
+    // La venta GENERA cash, así que crea la primera entrada de liquidez si no hay.
+    // (Para compras sin liquidez no auto-creamos: el usuario debería registrar el depósito.)
+    if(!liqTicker && !isCompra){
+      liqTicker = stableTickers[0]; // ARS para brokers ARS, USD para USD
+    }
     if(liqTicker){
       const isLiqARS = liqTicker === 'ARS' || liqTicker === 'PESOS';
       const adjQty   = isLiqARS ? totalARS : totalUSD;
