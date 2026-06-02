@@ -1092,21 +1092,18 @@ let prices    = JSON.parse(localStorage.getItem('pf6_prices')||'{}');
 // Esta limpieza one-time elimina los precios de CEDEARs para forzar re-fetch
 // con la nueva lógica al próximo refresh.
 (function migrateCedearPrices(){
-  const MIGRATION_KEY = 'pf6_migration_cedear_v1';
+  const MIGRATION_KEY = 'pf6_migration_cedear_v2';
   if(localStorage.getItem(MIGRATION_KEY)) return;
   try{
-    const ords = JSON.parse(localStorage.getItem('pf6_orders')||'[]');
-    const cedearTickers = [...new Set(ords.filter(o => o.type === 'CEDEAR').map(o => o.ticker))];
-    cedearTickers.forEach(t => {
-      delete prices[t];
-      delete prices[t+'_prev'];
-      delete prices[t+'_ars'];
-    });
-    if(cedearTickers.length){
-      localStorage.setItem('pf6_prices', JSON.stringify(prices));
-      console.log(`Migración: ${cedearTickers.length} precios de CEDEAR limpiados`);
-    }
+    // Limpieza agresiva: vaciamos TODO el cache de precios.
+    // Versión v1 sólo limpiaba CEDEARs detectados en localStorage.orders, pero
+    // si los datos vienen de Supabase (no presentes en localStorage al momento
+    // de la migración), no se detectaban. Esto fuerza un re-fetch completo.
+    prices = {};
+    localStorage.removeItem('pf6_prices');
+    localStorage.removeItem('pf6_lastFetch'); // forzar refetch en la próxima carga
     localStorage.setItem(MIGRATION_KEY, 'done');
+    console.log('Migración v2: cache de precios reseteado por completo');
   } catch(e){ console.warn('Migration failed:', e); }
 })();
 let mkt       = {};
@@ -1215,8 +1212,10 @@ async function supaLoad(){
       .eq('user_id', currentUser.id).single();
     if(set){
       if(set.brokers) brokers = set.brokers;
+      // Sólo sobreescribir watchlist si Supabase efectivamente trae datos.
+      // Si la columna no existe en la DB, set.watchlist es undefined y
+      // mantenemos el watchlist local (no lo wipeamos).
       if(Array.isArray(set.watchlist)) watchlist = set.watchlist;
-      else watchlist = [];
       if(set.broker_currency && typeof set.broker_currency === 'object') brokerCurrencyPrefs = set.broker_currency;
       if(set.portfolio_name){
         localStorage.setItem('pf6_name', set.portfolio_name);
@@ -1241,14 +1240,27 @@ async function supaSync(){
     if(orders.length){
       await supa.from('orders').insert(orders.map(o => ({user_id:currentUser.id, data:o})));
     }
-    await supa.from('settings').upsert({
-      user_id: currentUser.id,
-      brokers,
-      portfolio_name: localStorage.getItem('pf6_name') || 'Mi Portfolio',
-      watchlist,
-      broker_currency: brokerCurrencyPrefs,
-      updated_at: new Date().toISOString()
-    }, {onConflict:'user_id'});
+    // Intentar primero con todas las columnas (incluye watchlist y broker_currency).
+    // Si la DB no tiene esas columnas, hacer fallback al subset básico para no
+    // perder el sync de brokers y portfolio_name.
+    try{
+      await supa.from('settings').upsert({
+        user_id: currentUser.id,
+        brokers,
+        portfolio_name: localStorage.getItem('pf6_name') || 'Mi Portfolio',
+        watchlist,
+        broker_currency: brokerCurrencyPrefs,
+        updated_at: new Date().toISOString()
+      }, {onConflict:'user_id'});
+    } catch(e2){
+      console.warn('Settings upsert falló con columnas extras, retry sin watchlist/broker_currency:', e2?.message||e2);
+      await supa.from('settings').upsert({
+        user_id: currentUser.id,
+        brokers,
+        portfolio_name: localStorage.getItem('pf6_name') || 'Mi Portfolio',
+        updated_at: new Date().toISOString()
+      }, {onConflict:'user_id'});
+    }
   }catch(e){ console.log('Sync error:', e); }
 }
 async function supaSnap(date, usd){
