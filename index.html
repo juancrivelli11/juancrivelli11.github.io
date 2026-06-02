@@ -1092,18 +1092,19 @@ let prices    = JSON.parse(localStorage.getItem('pf6_prices')||'{}');
 // Esta limpieza one-time elimina los precios de CEDEARs para forzar re-fetch
 // con la nueva lógica al próximo refresh.
 (function migrateCedearPrices(){
-  const MIGRATION_KEY = 'pf6_migration_cedear_v2';
+  const MIGRATION_KEY = 'pf6_migration_cedear_v3';
   if(localStorage.getItem(MIGRATION_KEY)) return;
   try{
-    // Limpieza agresiva: vaciamos TODO el cache de precios.
-    // Versión v1 sólo limpiaba CEDEARs detectados en localStorage.orders, pero
-    // si los datos vienen de Supabase (no presentes en localStorage al momento
-    // de la migración), no se detectaban. Esto fuerza un re-fetch completo.
+    // v3: reverted al fetch .BA para CEDEARs (los precios incluyen ratio y spread).
+    // Limpiamos todo el cache de precios para forzar re-fetch limpio.
     prices = {};
     localStorage.removeItem('pf6_prices');
-    localStorage.removeItem('pf6_lastFetch'); // forzar refetch en la próxima carga
+    localStorage.removeItem('pf6_lastFetch');
+    // Limpiar también las migraciones viejas para no acumular keys
+    localStorage.removeItem('pf6_migration_cedear_v1');
+    localStorage.removeItem('pf6_migration_cedear_v2');
     localStorage.setItem(MIGRATION_KEY, 'done');
-    console.log('Migración v2: cache de precios reseteado por completo');
+    console.log('Migración v3: cache reseteado, CEDEARs vuelven a .BA');
   } catch(e){ console.warn('Migration failed:', e); }
 })();
 let mkt       = {};
@@ -1770,30 +1771,21 @@ async function doRefresh(force=false){
       });
     }catch(e){}
   }
-  // Argentine assets
-  // CEDEAR: usamos el precio del ticker UNDERLYING en USD (sin .BA) y dejamos
-  // que el sistema lo convierta con el CCL. Esto evita que Yahoo devuelva otra
-  // empresa al usar .BA (problema con CRM, FISV, etc).
-  // Acción Argentina y Bono: usan .BA porque ahí están listados realmente.
+  // Argentine assets (incluye CEDEARs, Acción Argentina y Bonos).
+  // TODOS usan .BA porque sus precios ya reflejan el ratio CEDEAR y spread local.
+  // Usar el ticker US directo sin aplicar ratio devolvía valuaciones 5x-50x infladas.
   const argAssets=pf.filter(a=>isARS(a.type));
-  const cedearAssets = argAssets.filter(a => a.type === 'CEDEAR');
-  const nonCedearArg = argAssets.filter(a => a.type !== 'CEDEAR');
-  for(const a of nonCedearArg){
+  for(const a of argAssets){
     if(isCash(a.ticker)){
       prices[a.ticker]=1; prices[a.ticker+'_prev']=1; prices[a.ticker+'_ars']=true; continue;
     }
     const data=await fetchArgPrice(a.ticker);
     if(data?.price>0){prices[a.ticker]=data.price;prices[a.ticker+'_prev']=data.prev;prices[a.ticker+'_ars']=true;}
   }
-  // US assets + CEDEAR underlying
+  // US assets
   const STABLE = ['USD','USDC','BUSD','DAI'];
   const usAssets=pf.filter(a=>!isARS(a.type)&&a.type!=='Cripto');
-  // Sumar los CEDEARs al fetch USA (fetchea con el ticker base sin .BA).
-  // OJO: NO borrar el flag _ars de antemano — si el fetch falla, el precio
-  // viejo en ARS quedaría interpretado como USD y daría valuaciones gigantes.
-  // El flag _ars se borra recién al guardar el nuevo precio USD exitoso.
-  const allToFetch = [...usAssets, ...cedearAssets];
-  const toFetch=allToFetch.filter(a=>!STABLE.includes(a.ticker.toUpperCase()));
+  const toFetch=usAssets.filter(a=>!STABLE.includes(a.ticker.toUpperCase()));
   usAssets.filter(a=>STABLE.includes(a.ticker.toUpperCase())).forEach(a=>{
     prices[a.ticker]=1;prices[a.ticker+'_prev']=1;
   });
@@ -1814,9 +1806,6 @@ async function doRefresh(force=false){
           if(data?.price > 0){
             prices[a.ticker] = data.price;
             prices[a.ticker+'_prev'] = data.prev;
-            // Si era un CEDEAR (antes guardado con _ars=true), borramos el flag
-            // recién ahora que tenemos el precio en USD confirmado.
-            if(a.type === 'CEDEAR') delete prices[a.ticker+'_ars'];
           }
         }catch(e){}
         done++;
