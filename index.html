@@ -1087,6 +1087,28 @@ let brokers   = JSON.parse(localStorage.getItem('pf6_brokers') || JSON.stringify
 // Si no hay preferencia guardada, se usa el default basado en ARS_BROKERS.
 let brokerCurrencyPrefs = JSON.parse(localStorage.getItem('pf6_broker_currency') || '{}');
 let prices    = JSON.parse(localStorage.getItem('pf6_prices')||'{}');
+// Migración: cuando cambiamos cómo cotizamos CEDEARs (de Yahoo .BA en pesos a
+// underlying US en dólares), los precios cacheados quedan mal interpretados.
+// Esta limpieza one-time elimina los precios de CEDEARs para forzar re-fetch
+// con la nueva lógica al próximo refresh.
+(function migrateCedearPrices(){
+  const MIGRATION_KEY = 'pf6_migration_cedear_v1';
+  if(localStorage.getItem(MIGRATION_KEY)) return;
+  try{
+    const ords = JSON.parse(localStorage.getItem('pf6_orders')||'[]');
+    const cedearTickers = [...new Set(ords.filter(o => o.type === 'CEDEAR').map(o => o.ticker))];
+    cedearTickers.forEach(t => {
+      delete prices[t];
+      delete prices[t+'_prev'];
+      delete prices[t+'_ars'];
+    });
+    if(cedearTickers.length){
+      localStorage.setItem('pf6_prices', JSON.stringify(prices));
+      console.log(`Migración: ${cedearTickers.length} precios de CEDEAR limpiados`);
+    }
+    localStorage.setItem(MIGRATION_KEY, 'done');
+  } catch(e){ console.warn('Migration failed:', e); }
+})();
 let mkt       = {};
 let currency  = 'USD';
 let currentUser = null;
@@ -1754,11 +1776,12 @@ async function doRefresh(force=false){
   // US assets + CEDEAR underlying
   const STABLE = ['USD','USDC','BUSD','DAI'];
   const usAssets=pf.filter(a=>!isARS(a.type)&&a.type!=='Cripto');
-  // Sumar los CEDEARs al fetch USA (fetchea con el ticker base sin .BA)
+  // Sumar los CEDEARs al fetch USA (fetchea con el ticker base sin .BA).
+  // OJO: NO borrar el flag _ars de antemano — si el fetch falla, el precio
+  // viejo en ARS quedaría interpretado como USD y daría valuaciones gigantes.
+  // El flag _ars se borra recién al guardar el nuevo precio USD exitoso.
   const allToFetch = [...usAssets, ...cedearAssets];
   const toFetch=allToFetch.filter(a=>!STABLE.includes(a.ticker.toUpperCase()));
-  // Limpiar el flag _ars para CEDEARs (puede estar cacheado de versiones previas)
-  cedearAssets.forEach(a => { delete prices[a.ticker+'_ars']; });
   usAssets.filter(a=>STABLE.includes(a.ticker.toUpperCase())).forEach(a=>{
     prices[a.ticker]=1;prices[a.ticker+'_prev']=1;
   });
@@ -1779,6 +1802,9 @@ async function doRefresh(force=false){
           if(data?.price > 0){
             prices[a.ticker] = data.price;
             prices[a.ticker+'_prev'] = data.prev;
+            // Si era un CEDEAR (antes guardado con _ars=true), borramos el flag
+            // recién ahora que tenemos el precio en USD confirmado.
+            if(a.type === 'CEDEAR') delete prices[a.ticker+'_ars'];
           }
         }catch(e){}
         done++;
