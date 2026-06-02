@@ -1737,19 +1737,28 @@ async function doRefresh(force=false){
     }catch(e){}
   }
   // Argentine assets
+  // CEDEAR: usamos el precio del ticker UNDERLYING en USD (sin .BA) y dejamos
+  // que el sistema lo convierta con el CCL. Esto evita que Yahoo devuelva otra
+  // empresa al usar .BA (problema con CRM, FISV, etc).
+  // Acción Argentina y Bono: usan .BA porque ahí están listados realmente.
   const argAssets=pf.filter(a=>isARS(a.type));
-  for(const a of argAssets){
+  const cedearAssets = argAssets.filter(a => a.type === 'CEDEAR');
+  const nonCedearArg = argAssets.filter(a => a.type !== 'CEDEAR');
+  for(const a of nonCedearArg){
     if(isCash(a.ticker)){
-      // Cash in ARS: price = 1 ARS
       prices[a.ticker]=1; prices[a.ticker+'_prev']=1; prices[a.ticker+'_ars']=true; continue;
     }
     const data=await fetchArgPrice(a.ticker);
     if(data?.price>0){prices[a.ticker]=data.price;prices[a.ticker+'_prev']=data.prev;prices[a.ticker+'_ars']=true;}
   }
-  // US assets
+  // US assets + CEDEAR underlying
   const STABLE = ['USD','USDC','BUSD','DAI'];
   const usAssets=pf.filter(a=>!isARS(a.type)&&a.type!=='Cripto');
-  const toFetch=usAssets.filter(a=>!STABLE.includes(a.ticker.toUpperCase()));
+  // Sumar los CEDEARs al fetch USA (fetchea con el ticker base sin .BA)
+  const allToFetch = [...usAssets, ...cedearAssets];
+  const toFetch=allToFetch.filter(a=>!STABLE.includes(a.ticker.toUpperCase()));
+  // Limpiar el flag _ars para CEDEARs (puede estar cacheado de versiones previas)
+  cedearAssets.forEach(a => { delete prices[a.ticker+'_ars']; });
   usAssets.filter(a=>STABLE.includes(a.ticker.toUpperCase())).forEach(a=>{
     prices[a.ticker]=1;prices[a.ticker+'_prev']=1;
   });
