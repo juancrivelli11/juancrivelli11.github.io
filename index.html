@@ -325,8 +325,9 @@ body.dark #auth-welcome h2{color:#90caf9}
         onerror="this.style.display='none'">
       <span style="font-size:26px;font-weight:900;font-family:Nunito,sans-serif;line-height:1;margin-top:-6px"><span style="color:#1a7fe8">Cri</span><span style="color:#3db544">Fund</span></span>
     </div>
-    <div class="hdr-name">
-      <h1 id="pfName" onclick="editName()" title="Click para editar" style="cursor:pointer">Mi Portfolio</h1>
+    <div class="hdr-name" style="position:relative">
+      <h1 id="pfName" onclick="togglePortfolioMenu(event)" title="Click para cambiar de portfolio" style="cursor:pointer">Mi Portfolio <span style="font-size:13px;color:var(--muted);font-weight:400">▾</span></h1>
+      <div id="portfolioMenu" style="display:none;position:absolute;top:100%;left:0;background:var(--card);border:1px solid var(--blueL);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.15);min-width:240px;z-index:300;max-height:400px;overflow-y:auto;margin-top:4px"></div>
       <p id="statusBar">Tocá Actualizar para obtener precios</p>
     </div>
   </div>
@@ -1078,14 +1079,54 @@ const TICKERS = {
   ],
 };
 // ═══════════════════════════════════════════════════════════════════════════
-// STATE
+// MULTI-PORTFOLIO STATE
 // ═══════════════════════════════════════════════════════════════════════════
-let orders    = JSON.parse(localStorage.getItem('pf6_orders')  || '[]');
-let snapshots = JSON.parse(localStorage.getItem('pf6_snaps')   || '[]');
-let brokers   = JSON.parse(localStorage.getItem('pf6_brokers') || JSON.stringify(DEFAULT_BROKERS));
+// Cada portfolio es un "escritorio" independiente con sus propias órdenes,
+// brokers, watchlist, snapshots y preferencias. Los datos se guardan en
+// localStorage con prefijo pf6_p_{portfolioId}_{key}.
+let portfolios = JSON.parse(localStorage.getItem('pf6_portfolios') || 'null');
+let currentPortfolioId = localStorage.getItem('pf6_currentPortfolio') || null;
+
+// MIGRACIÓN: si no hay portfolios todavía, mover los datos existentes a un
+// portfolio default y dejar todo listo para multi-portfolio.
+(function migratePortfolios(){
+  if(portfolios && portfolios.length > 0) return;
+  try{
+    const defaultId = 'pf_default';
+    const existingName = localStorage.getItem('pf6_name') || 'Mi Portfolio';
+    portfolios = [{ id: defaultId, name: existingName, createdAt: Date.now() }];
+    currentPortfolioId = defaultId;
+    // Migrar datos existentes a las claves prefijadas
+    const keysToMigrate = [
+      ['pf6_orders',           `pf6_p_${defaultId}_orders`,           '[]'],
+      ['pf6_snaps',            `pf6_p_${defaultId}_snaps`,            '[]'],
+      ['pf6_brokers',          `pf6_p_${defaultId}_brokers`,          JSON.stringify(DEFAULT_BROKERS)],
+      ['pf6_watchlist',        `pf6_p_${defaultId}_watchlist`,        '[]'],
+      ['pf6_broker_currency',  `pf6_p_${defaultId}_broker_currency`,  '{}'],
+    ];
+    keysToMigrate.forEach(([oldK, newK, def]) => {
+      const v = localStorage.getItem(oldK) || def;
+      if(!localStorage.getItem(newK)) localStorage.setItem(newK, v);
+    });
+    localStorage.setItem('pf6_portfolios', JSON.stringify(portfolios));
+    localStorage.setItem('pf6_currentPortfolio', currentPortfolioId);
+    console.log('Migración portfolios: default creado, datos preservados');
+  } catch(e){ console.warn('Portfolio migration failed:', e); }
+})();
+
+// Helper: clave localStorage prefijada para el portfolio actual
+function pfKey(suffix){
+  return `pf6_p_${currentPortfolioId || 'pf_default'}_${suffix}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STATE (cargado para el portfolio activo)
+// ═══════════════════════════════════════════════════════════════════════════
+let orders    = JSON.parse(localStorage.getItem(pfKey('orders'))  || '[]');
+let snapshots = JSON.parse(localStorage.getItem(pfKey('snaps'))   || '[]');
+let brokers   = JSON.parse(localStorage.getItem(pfKey('brokers')) || JSON.stringify(DEFAULT_BROKERS));
 // Preferencia de moneda por broker: { "Binance": "USD", "IOL Crypto": "ARS", ... }
-// Si no hay preferencia guardada, se usa el default basado en ARS_BROKERS.
-let brokerCurrencyPrefs = JSON.parse(localStorage.getItem('pf6_broker_currency') || '{}');
+let brokerCurrencyPrefs = JSON.parse(localStorage.getItem(pfKey('broker_currency')) || '{}');
 let prices    = JSON.parse(localStorage.getItem('pf6_prices')||'{}');
 // Migración: cuando cambiamos cómo cotizamos CEDEARs (de Yahoo .BA en pesos a
 // underlying US en dólares), los precios cacheados quedan mal interpretados.
@@ -1118,11 +1159,141 @@ let sortKey = null, sortDir = 'desc';
 // Broker actualmente abierto en vista detalle (para re-renderizar al ordenar).
 let _currentBrokerView = null;
 function localSave(){
-  localStorage.setItem('pf6_orders',   JSON.stringify(orders));
-  localStorage.setItem('pf6_snaps',    JSON.stringify(snapshots));
-  localStorage.setItem('pf6_brokers',  JSON.stringify(brokers));
-  localStorage.setItem('pf6_broker_currency', JSON.stringify(brokerCurrencyPrefs));
+  // Guarda con prefijo del portfolio activo (multi-portfolio)
+  localStorage.setItem(pfKey('orders'),   JSON.stringify(orders));
+  localStorage.setItem(pfKey('snaps'),    JSON.stringify(snapshots));
+  localStorage.setItem(pfKey('brokers'),  JSON.stringify(brokers));
+  localStorage.setItem(pfKey('broker_currency'), JSON.stringify(brokerCurrencyPrefs));
 }
+// ═══════════════════════════════════════════════════════════════════════════
+// PORTFOLIO MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════
+function savePortfoliosList(){
+  localStorage.setItem('pf6_portfolios', JSON.stringify(portfolios));
+  localStorage.setItem('pf6_currentPortfolio', currentPortfolioId);
+  if(currentUser) supaSync();
+}
+function getCurrentPortfolio(){
+  return portfolios.find(p => p.id === currentPortfolioId) || portfolios[0];
+}
+function reloadStateFromCurrentPortfolio(){
+  // Recarga las variables globales desde el portfolio activo
+  orders    = JSON.parse(localStorage.getItem(pfKey('orders'))  || '[]');
+  snapshots = JSON.parse(localStorage.getItem(pfKey('snaps'))   || '[]');
+  brokers   = JSON.parse(localStorage.getItem(pfKey('brokers')) || JSON.stringify(DEFAULT_BROKERS));
+  brokerCurrencyPrefs = JSON.parse(localStorage.getItem(pfKey('broker_currency')) || '{}');
+  watchlist = JSON.parse(localStorage.getItem(pfKey('watchlist')) || '[]');
+  const p = getCurrentPortfolio();
+  if(p) document.getElementById('pfName').textContent = p.name;
+}
+function switchPortfolio(id){
+  if(id === currentPortfolioId) return;
+  // Antes de cambiar, guardar el state actual al portfolio actual (por las dudas)
+  localSave();
+  currentPortfolioId = id;
+  localStorage.setItem('pf6_currentPortfolio', currentPortfolioId);
+  reloadStateFromCurrentPortfolio();
+  // Resetear cache de precios y refrescar la UI
+  doRefresh(true);
+  render();
+  renderDividends();
+  renderWatchlist();
+  setStatus(`✓ Cambiado a "${getCurrentPortfolio()?.name}"`, false);
+}
+function createPortfolio(){
+  const name = prompt('Nombre del nuevo portfolio:', 'Cliente / Cuenta');
+  if(!name?.trim()) return;
+  const id = 'pf_' + Date.now();
+  portfolios.push({ id, name: name.trim(), createdAt: Date.now() });
+  savePortfoliosList();
+  // Cambiar al nuevo (vacío)
+  localSave(); // guarda el actual antes de cambiar
+  currentPortfolioId = id;
+  localStorage.setItem('pf6_currentPortfolio', currentPortfolioId);
+  // Inicializar vacío
+  orders = [];
+  snapshots = [];
+  brokers = JSON.parse(JSON.stringify(DEFAULT_BROKERS));
+  brokerCurrencyPrefs = {};
+  watchlist = [];
+  localSave();
+  localStorage.setItem(pfKey('watchlist'), JSON.stringify(watchlist));
+  reloadStateFromCurrentPortfolio();
+  render();
+  alert(`✓ Portfolio "${name.trim()}" creado. Empezá a cargar órdenes — todas las fechas van a ser fidedignas.`);
+}
+function renameCurrentPortfolio(){
+  const p = getCurrentPortfolio();
+  if(!p) return;
+  const newName = prompt('Nuevo nombre del portfolio:', p.name);
+  if(!newName?.trim() || newName.trim() === p.name) return;
+  p.name = newName.trim();
+  savePortfoliosList();
+  document.getElementById('pfName').textContent = p.name;
+}
+function deleteCurrentPortfolio(){
+  if(portfolios.length <= 1){
+    alert('No podés eliminar el único portfolio. Creá otro primero.');
+    return;
+  }
+  const p = getCurrentPortfolio();
+  if(!p) return;
+  // === PRIMERA confirmación: aviso general ===
+  const ordCount  = orders.length;
+  const brkCount  = brokers.length;
+  const wlCount   = watchlist.length;
+  const summary = `📊 ${ordCount} órdenes · ${brkCount} brokers · ${wlCount} en watchlist`;
+  if(!confirm(`⚠️ ¿Eliminar el portfolio "${p.name}"?\n\nContiene:\n${summary}\n\nEsto borra TODOS sus datos. No afecta a los otros portfolios, pero NO se puede deshacer.\n\n¿Continuar?`)) return;
+  // === SEGUNDA confirmación: tipear el nombre exacto ===
+  const typed = prompt(`Última confirmación. Para borrar definitivamente, escribí el nombre EXACTO del portfolio:\n\n"${p.name}"`);
+  if(typed === null) return; // canceló
+  if(typed.trim() !== p.name){
+    alert(`❌ El nombre no coincide. No se eliminó nada.\n\nEscribiste: "${typed.trim()}"\nEsperaba: "${p.name}"`);
+    return;
+  }
+  // OK, borrar
+  const id = p.id;
+  ['orders','snaps','brokers','watchlist','broker_currency'].forEach(k => {
+    localStorage.removeItem(`pf6_p_${id}_${k}`);
+  });
+  portfolios = portfolios.filter(x => x.id !== id);
+  currentPortfolioId = portfolios[0].id;
+  savePortfoliosList();
+  reloadStateFromCurrentPortfolio();
+  render();
+  alert(`✓ Portfolio "${p.name}" eliminado. Cambiado a "${getCurrentPortfolio()?.name}".`);
+}
+function togglePortfolioMenu(ev){
+  ev?.stopPropagation();
+  const menu = document.getElementById('portfolioMenu');
+  if(!menu) return;
+  if(menu.style.display === 'block'){ menu.style.display = 'none'; return; }
+  // Re-render contenido
+  const cur = getCurrentPortfolio();
+  let html = `<div style="padding:8px 10px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--blueL)">Mis portfolios</div>`;
+  portfolios.forEach(p => {
+    const isCur = p.id === currentPortfolioId;
+    html += `<div onclick="event.stopPropagation();switchPortfolio('${p.id}');togglePortfolioMenu();"
+      style="padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--blueLL);${isCur?'background:var(--blueLL);font-weight:700':''}"
+      onmouseover="if(!${isCur}) this.style.background='var(--blueLL)'" onmouseout="if(!${isCur}) this.style.background=''">
+      <span>${p.name}</span>${isCur?'<span style="font-size:10px;color:var(--blue)">activo</span>':''}
+    </div>`;
+  });
+  html += `<div style="padding:6px 0;border-top:1px solid var(--blueL)">
+    <div onclick="event.stopPropagation();togglePortfolioMenu();createPortfolio();" style="padding:6px 12px;cursor:pointer;font-size:12px;color:var(--green)" onmouseover="this.style.background='var(--blueLL)'" onmouseout="this.style.background=''">+ Nuevo portfolio</div>
+    <div onclick="event.stopPropagation();togglePortfolioMenu();renameCurrentPortfolio();" style="padding:6px 12px;cursor:pointer;font-size:12px;color:var(--blue)" onmouseover="this.style.background='var(--blueLL)'" onmouseout="this.style.background=''">✏️ Renombrar actual</div>
+    <div onclick="event.stopPropagation();togglePortfolioMenu();deleteCurrentPortfolio();" style="padding:6px 12px;cursor:pointer;font-size:12px;color:var(--red)" onmouseover="this.style.background='var(--blueLL)'" onmouseout="this.style.background=''">🗑️ Eliminar actual</div>
+  </div>`;
+  menu.innerHTML = html;
+  menu.style.display = 'block';
+}
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('portfolioMenu');
+  const btn = document.getElementById('pfName');
+  if(menu && menu.style.display === 'block' && !menu.contains(e.target) && e.target !== btn){
+    menu.style.display = 'none';
+  }
+});
 async function save(){
   localSave();
   if(currentUser) await supaSync();
@@ -1171,10 +1342,23 @@ function clearAllLocalData(){
   orders = [];
   snapshots = [];
   brokers = JSON.parse(JSON.stringify(DEFAULT_BROKERS));
+  watchlist = [];
+  brokerCurrencyPrefs = {};
   prices = {};
   mkt = {};
-  ['pf6_orders','pf6_snaps','pf6_brokers','pf6_prices','pf6_name','pf6_lastFetch'].forEach(k=>localStorage.removeItem(k));
-  document.getElementById('pfName').textContent = 'Mi Portfolio';
+  // Borrar TODAS las claves prefijadas de portfolios (multi-portfolio)
+  Object.keys(localStorage).forEach(k => {
+    if(k.startsWith('pf6_p_') || ['pf6_orders','pf6_snaps','pf6_brokers','pf6_prices','pf6_name','pf6_lastFetch','pf6_watchlist','pf6_broker_currency','pf6_portfolios','pf6_currentPortfolio'].includes(k)){
+      localStorage.removeItem(k);
+    }
+  });
+  // Reinicializar con el portfolio default para el nuevo usuario
+  const defaultId = 'pf_default';
+  portfolios = [{ id: defaultId, name: 'Mi Portfolio', createdAt: Date.now() }];
+  currentPortfolioId = defaultId;
+  localStorage.setItem('pf6_portfolios', JSON.stringify(portfolios));
+  localStorage.setItem('pf6_currentPortfolio', currentPortfolioId);
+  document.getElementById('pfName').textContent = 'Mi Portfolio ▾';
 }
 function applyAuthGate(isLoggedIn){
   // Sin sesión: oculta toda la app y muestra pantalla de bienvenida.
@@ -1198,38 +1382,71 @@ async function supaLoad(){
   try{
     // La nube es la única fuente de verdad: vaciamos lo local primero
     // así una cuenta sin datos no "hereda" lo que dejó otro usuario.
-    orders = [];
-    snapshots = [];
+    Object.keys(localStorage).forEach(k => { if(k.startsWith('pf6_p_')) localStorage.removeItem(k); });
+    orders = []; snapshots = []; watchlist = []; brokerCurrencyPrefs = {};
     brokers = JSON.parse(JSON.stringify(DEFAULT_BROKERS));
-    const { data: ords } = await supa.from('orders').select('*')
-      .eq('user_id', currentUser.id).order('created_at');
-    if(ords?.length){
-      orders = ords.map(o => o.data);
-    }
-    const { data: snaps } = await supa.from('snapshots').select('*')
-      .eq('user_id', currentUser.id).order('date');
-    if(snaps?.length) snapshots = snaps.map(s => ({date:s.date, usd:s.usd}));
+    // === SETTINGS primero (para saber portfolios y current) ===
     const { data: set } = await supa.from('settings').select('*')
       .eq('user_id', currentUser.id).single();
-    if(set){
-      if(set.brokers) brokers = set.brokers;
-      // Sólo sobreescribir watchlist si Supabase efectivamente trae datos.
-      // Si la columna no existe en la DB, set.watchlist es undefined y
-      // mantenemos el watchlist local (no lo wipeamos).
-      if(Array.isArray(set.watchlist)) watchlist = set.watchlist;
-      if(set.broker_currency && typeof set.broker_currency === 'object') brokerCurrencyPrefs = set.broker_currency;
-      if(set.portfolio_name){
-        localStorage.setItem('pf6_name', set.portfolio_name);
-        document.getElementById('pfName').textContent = set.portfolio_name;
-      } else {
-        document.getElementById('pfName').textContent = 'Mi Portfolio';
-        localStorage.removeItem('pf6_name');
-      }
+    let multi = null;
+    if(set && set.brokers && set.brokers._multi){
+      // Formato nuevo: multi-portfolio
+      multi = set.brokers;
+      portfolios = multi.portfolios || [];
+      currentPortfolioId = multi.currentPortfolioId || (portfolios[0]?.id);
     } else {
-      document.getElementById('pfName').textContent = 'Mi Portfolio';
-      localStorage.removeItem('pf6_name');
+      // Backward compat: single portfolio
+      const defaultId = 'pf_default';
+      portfolios = [{ id: defaultId, name: set?.portfolio_name || 'Mi Portfolio', createdAt: Date.now() }];
+      currentPortfolioId = defaultId;
     }
-    localSave();
+    if(!portfolios.length){
+      const defaultId = 'pf_default';
+      portfolios = [{ id: defaultId, name: 'Mi Portfolio', createdAt: Date.now() }];
+      currentPortfolioId = defaultId;
+    }
+    localStorage.setItem('pf6_portfolios', JSON.stringify(portfolios));
+    localStorage.setItem('pf6_currentPortfolio', currentPortfolioId);
+    // === ORDERS, agrupados por portfolio_id ===
+    const { data: ords } = await supa.from('orders').select('*')
+      .eq('user_id', currentUser.id).order('created_at');
+    const ordersByPid = {};
+    portfolios.forEach(p => { ordersByPid[p.id] = []; });
+    if(ords?.length){
+      ords.forEach(row => {
+        const d = row.data || {};
+        const pid = d.portfolio_id || currentPortfolioId;
+        if(!ordersByPid[pid]) ordersByPid[pid] = [];
+        // Sacar portfolio_id del data antes de guardar (es metadata)
+        const { portfolio_id, ...orderData } = d;
+        ordersByPid[pid].push(orderData);
+      });
+    }
+    portfolios.forEach(p => {
+      localStorage.setItem(`pf6_p_${p.id}_orders`, JSON.stringify(ordersByPid[p.id] || []));
+    });
+    // === METADATA por portfolio (brokers, watchlist, etc) ===
+    if(multi && multi.portfolioMeta){
+      Object.entries(multi.portfolioMeta).forEach(([pid, meta]) => {
+        if(Array.isArray(meta.brokers)) localStorage.setItem(`pf6_p_${pid}_brokers`, JSON.stringify(meta.brokers));
+        if(Array.isArray(meta.watchlist)) localStorage.setItem(`pf6_p_${pid}_watchlist`, JSON.stringify(meta.watchlist));
+        if(meta.broker_currency && typeof meta.broker_currency === 'object') localStorage.setItem(`pf6_p_${pid}_broker_currency`, JSON.stringify(meta.broker_currency));
+      });
+    } else if(set){
+      // Backward compat: todo va al portfolio default
+      const pid = currentPortfolioId;
+      if(Array.isArray(set.brokers)) localStorage.setItem(`pf6_p_${pid}_brokers`, JSON.stringify(set.brokers));
+      if(Array.isArray(set.watchlist)) localStorage.setItem(`pf6_p_${pid}_watchlist`, JSON.stringify(set.watchlist));
+      if(set.broker_currency && typeof set.broker_currency === 'object') localStorage.setItem(`pf6_p_${pid}_broker_currency`, JSON.stringify(set.broker_currency));
+    }
+    // === SNAPSHOTS (van todos al portfolio actual por ahora) ===
+    const { data: snaps } = await supa.from('snapshots').select('*')
+      .eq('user_id', currentUser.id).order('date');
+    if(snaps?.length){
+      localStorage.setItem(`pf6_p_${currentPortfolioId}_snaps`, JSON.stringify(snaps.map(s => ({date:s.date, usd:s.usd}))));
+    }
+    // === Cargar state desde portfolio activo ===
+    reloadStateFromCurrentPortfolio();
     render();
     setStatus('☁ Datos cargados desde la nube', false);
   }catch(e){ console.log('Load error:', e); }
@@ -1237,30 +1454,51 @@ async function supaLoad(){
 async function supaSync(){
   if(!currentUser) return;
   try{
+    // === ORDERS ===
+    // Combinar las órdenes de TODOS los portfolios (cada una con portfolio_id stamped).
+    // Esto preserva data de otros portfolios cuando hacemos sync desde uno solo.
+    const allOrders = [];
+    portfolios.forEach(p => {
+      const pOrders = (p.id === currentPortfolioId)
+        ? orders // usar las en memoria (más actualizadas)
+        : JSON.parse(localStorage.getItem(`pf6_p_${p.id}_orders`) || '[]');
+      pOrders.forEach(o => allOrders.push({ ...o, portfolio_id: p.id }));
+    });
     await supa.from('orders').delete().eq('user_id', currentUser.id);
-    if(orders.length){
-      await supa.from('orders').insert(orders.map(o => ({user_id:currentUser.id, data:o})));
+    if(allOrders.length){
+      const BATCH = 500;
+      for(let i = 0; i < allOrders.length; i += BATCH){
+        const batch = allOrders.slice(i, i + BATCH).map(o => ({user_id:currentUser.id, data:o}));
+        await supa.from('orders').insert(batch);
+      }
     }
-    // Intentar primero con todas las columnas (incluye watchlist y broker_currency).
-    // Si la DB no tiene esas columnas, hacer fallback al subset básico para no
-    // perder el sync de brokers y portfolio_name.
+    // === SETTINGS (multi-portfolio metadata) ===
+    // Empaquetamos la lista de portfolios + metadata por portfolio (brokers, watchlist, etc.)
+    // dentro del campo `brokers` (JSONB) para no requerir cambios de schema.
+    const portfolioMeta = {};
+    portfolios.forEach(p => {
+      portfolioMeta[p.id] = {
+        brokers: (p.id === currentPortfolioId)
+          ? brokers
+          : JSON.parse(localStorage.getItem(`pf6_p_${p.id}_brokers`) || JSON.stringify(DEFAULT_BROKERS)),
+        watchlist: (p.id === currentPortfolioId)
+          ? watchlist
+          : JSON.parse(localStorage.getItem(`pf6_p_${p.id}_watchlist`) || '[]'),
+        broker_currency: (p.id === currentPortfolioId)
+          ? brokerCurrencyPrefs
+          : JSON.parse(localStorage.getItem(`pf6_p_${p.id}_broker_currency`) || '{}'),
+      };
+    });
+    const multiPayload = { _multi: true, portfolios, currentPortfolioId, portfolioMeta };
     try{
       await supa.from('settings').upsert({
         user_id: currentUser.id,
-        brokers,
-        portfolio_name: localStorage.getItem('pf6_name') || 'Mi Portfolio',
-        watchlist,
-        broker_currency: brokerCurrencyPrefs,
+        brokers: multiPayload,
+        portfolio_name: getCurrentPortfolio()?.name || 'Mi Portfolio',
         updated_at: new Date().toISOString()
       }, {onConflict:'user_id'});
     } catch(e2){
-      console.warn('Settings upsert falló con columnas extras, retry sin watchlist/broker_currency:', e2?.message||e2);
-      await supa.from('settings').upsert({
-        user_id: currentUser.id,
-        brokers,
-        portfolio_name: localStorage.getItem('pf6_name') || 'Mi Portfolio',
-        updated_at: new Date().toISOString()
-      }, {onConflict:'user_id'});
+      console.warn('Settings upsert error:', e2?.message||e2);
     }
   }catch(e){ console.log('Sync error:', e); }
 }
@@ -2212,11 +2450,11 @@ function refreshFilterBrokerDropdown(){
 // ═══════════════════════════════════════════════════════════════════════════
 // WATCHLIST (Seguimiento)
 // ═══════════════════════════════════════════════════════════════════════════
-let watchlist = JSON.parse(localStorage.getItem('pf6_watchlist') || '[]');
+let watchlist = JSON.parse(localStorage.getItem(pfKey('watchlist')) || '[]');
 let _watchPrices = JSON.parse(localStorage.getItem('pf6_watchPrices') || '{}'); // {ticker: {price, ts, returns}}
 
 function saveWatchlist(){
-  localStorage.setItem('pf6_watchlist', JSON.stringify(watchlist));
+  localStorage.setItem(pfKey('watchlist'), JSON.stringify(watchlist));
   if(currentUser) supaSync();
 }
 
@@ -4351,13 +4589,8 @@ function setStatus(msg,loading){
   e.style.color=loading?'var(--blue2)':'var(--muted)';
 }
 function editName(){
-  const cur=localStorage.getItem('pf6_name')||'Mi Portfolio';
-  const name=prompt('Nombre del portfolio:',cur);
-  if(name?.trim()){
-    localStorage.setItem('pf6_name',name.trim());
-    el('pfName').textContent=name.trim();
-    if(currentUser) supaSync();
-  }
+  // Ahora delega en renameCurrentPortfolio (multi-portfolio)
+  renameCurrentPortfolio();
 }
 function configFMP(){
   const cur=localStorage.getItem('pf6_fmp')||'';
