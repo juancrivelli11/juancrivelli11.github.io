@@ -1448,6 +1448,82 @@ function getPortfolio(broker=null){
 
 // Cantidad poseída de un ticker (en un broker, opcional) a una fecha dada.
 // Útil para calcular dividendos retroactivos: sólo cobrás divs si tenías el activo.
+// IRR (Tasa Interna de Retorno) anualizada para una serie de cash flows.
+// cashFlows: [{date: Date, amount: number}] — amount NEGATIVO = compra/salida,
+// POSITIVO = venta/entrada o valor actual final. Usa Newton-Raphson.
+function computeIRR(cashFlows, guess = 0.1){
+  if(cashFlows.length < 2) return null;
+  // Verificar que haya al menos un cash flow negativo y uno positivo
+  const hasNeg = cashFlows.some(cf => cf.amount < 0);
+  const hasPos = cashFlows.some(cf => cf.amount > 0);
+  if(!hasNeg || !hasPos) return null;
+  const t0 = cashFlows[0].date.getTime();
+  const days = cashFlows.map(cf => (cf.date.getTime() - t0) / (1000*60*60*24));
+  let rate = guess;
+  const MAX_ITER = 100;
+  const TOL = 1e-7;
+  for(let iter = 0; iter < MAX_ITER; iter++){
+    let npv = 0, dnpv = 0;
+    for(let i = 0; i < cashFlows.length; i++){
+      const t = days[i] / 365;
+      const base = 1 + rate;
+      if(base <= 0) return null;
+      const factor = Math.pow(base, t);
+      npv += cashFlows[i].amount / factor;
+      dnpv -= t * cashFlows[i].amount / (factor * base);
+    }
+    if(Math.abs(npv) < TOL) return rate;
+    if(Math.abs(dnpv) < 1e-12) return null; // derivada cero
+    const newRate = rate - npv / dnpv;
+    if(newRate <= -0.999) return null; // rate inválido
+    if(Math.abs(newRate - rate) < TOL) return newRate;
+    rate = newRate;
+  }
+  return null; // no convergió
+}
+
+// Calcula TIR anualizada y días de tenencia para un activo enrichado.
+// Para activos ARS usa montos en pesos históricos; para USD usa dólares.
+function calcAssetIRR(asset, currentCCL){
+  const ticker = asset.ticker;
+  const isAsArs = isARS(asset.type);
+  // Tomar todas las órdenes reales (no auto, no dividend, no expense)
+  const ords = orders.filter(o => o.ticker === ticker && !o.auto && !o.dividend && !o.expense && o.date)
+    .sort((a,b) => (a.date||'').localeCompare(b.date||''));
+  if(!ords.length) return { tir: null, days: 0 };
+  const cashFlows = [];
+  for(const o of ords){
+    const date = new Date(o.date);
+    let amt;
+    if(isAsArs){
+      // ARS: usar priceOrig (pesos al momento de la compra) + comm convertida al CCL del momento
+      const pOrig = (typeof o.priceOrig === 'number' && o.priceOrig > 0) ? o.priceOrig : (o.price * (o.cclAtOrder || currentCCL));
+      const commARS = (o.comm || 0) * (o.cclAtOrder || currentCCL);
+      amt = o.qty * pOrig + commARS;
+    } else {
+      // USD: usar price (USD) directamente
+      amt = o.qty * o.price + (o.comm || 0);
+    }
+    cashFlows.push({ date, amount: o.action === 'Compra' ? -amt : amt });
+  }
+  // Valor actual de la tenencia como inflow final
+  const currentValue = isAsArs
+    ? (asset.hasPx ? asset.value * currentCCL : (asset.costOrig || 0))
+    : (asset.hasPx ? asset.value : asset.cost);
+  if(currentValue > 0){
+    cashFlows.push({ date: new Date(), amount: currentValue });
+  }
+  const firstDate = cashFlows[0].date;
+  const daysHeld = Math.max(1, Math.round((Date.now() - firstDate.getTime()) / (1000*60*60*24)));
+  // Si llevás muy poco tiempo (< 7 días), TIR anualizada no es significativa
+  if(daysHeld < 7) return { tir: null, days: daysHeld };
+  // Probar varios guesses para evitar quedarse en mínimos locales
+  let tir = computeIRR(cashFlows, 0.1);
+  if(tir == null) tir = computeIRR(cashFlows, -0.1);
+  if(tir == null) tir = computeIRR(cashFlows, 0.5);
+  return { tir, days: daysHeld };
+}
+
 function qtyAtDate(ticker, broker, date){
   let qty = 0;
   const sorted = orders
@@ -1628,6 +1704,7 @@ function getSortValue(a, key){
     case 'dayPct':   return a.dayPct;
     case 'dayDol':   return a.dayDol;
     case 'avgPrice': return a.avgPrice;
+    case 'tir':      return a._tir; // se setea en renderTable durante el render
     case 'pnlPct':   return a.pnlPct;
     case 'pnl':      return a.pnl;
     case 'value':    return a.hasPx ? a.value : a.cost;
@@ -1974,12 +2051,20 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
     <th class="th-sort" onclick="setSort('dayPct')">Var% Diaria${sortArrow('dayPct')}</th>
     <th class="th-sort" onclick="setSort('dayDol')">Var$ Diaria${sortArrow('dayDol')}</th>
     <th class="th-sort" onclick="setSort('avgPrice')">PPC${sortArrow('avgPrice')}</th>
+    <th class="th-sort" onclick="setSort('tir')" title="Tasa Interna de Retorno anualizada — considera compras, ventas parciales y valor actual">TIR${sortArrow('tir')}</th>
     <th class="th-sort" onclick="setSort('pnlPct')">Gan%${sortArrow('pnlPct')}</th>
     <th class="th-sort" onclick="setSort('pnl')">Gan$${sortArrow('pnl')}</th>
     <th class="th-sort" onclick="setSort('value')">Total${sortArrow('value')}</th>
     <th></th>
   </tr></thead>`;
   const tbody=document.createElement('tbody');
+  // Precomputar TIR y días para todos los activos ANTES del sort,
+  // así el sort por TIR funciona y no recalculamos dentro del forEach.
+  pf.forEach(a => {
+    const info = calcAssetIRR(a, c);
+    a._tir = info.tir;
+    a._daysHeld = info.days;
+  });
   pf = sortPf(pf);
   pf.forEach(a=>{
     const dc=a.dayPct!=null?(a.dayPct>=0?'up':'dn'):'neu';
@@ -2009,12 +2094,25 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
       info.appendChild(bd);
     }
     cell.appendChild(info);td.appendChild(cell);tr.appendChild(td);
+    // TIR + tiempo de tenencia (ya precomputados arriba)
+    const tirVal = a._tir;
+    const daysHeld = a._daysHeld || 0;
+    const tirCls = tirVal == null ? 'neu' : (tirVal >= 0 ? 'up' : 'dn');
+    const tirStr = tirVal == null
+      ? '—'
+      : `${tirVal>=0?'+':''}${n2(tirVal*100,2)}%`;
+    const timeStr = daysHeld < 30
+      ? `${daysHeld}d`
+      : daysHeld < 365
+        ? `${Math.round(daysHeld/30)}m`
+        : `${(daysHeld/365).toFixed(1)}a`;
     tr.innerHTML+=`
       <td>${fmtQty(a.qty,a.type)}</td>
       <td class="${a.hasPx&&a.price>a.avgPrice?'up':a.hasPx&&a.price<a.avgPrice?'dn':''}">${priceStr}</td>
       <td class="${dc}">${a.dayPct!=null?pc(a.dayPct):'—'}</td>
       <td class="${dc}">${a.dayDol!=null?(a.dayDol>=0?'+':'')+( isARS(a.type)?$a(a.dayDol*c):$u(a.dayDol) ):'—'}</td>
       <td style="font-weight:600">${ppcStr}</td>
+      <td class="${tirCls}" style="font-weight:600" title="Tiempo de tenencia: ${daysHeld} días">${tirStr}<div style="font-size:9px;font-weight:400;color:var(--muted)">${timeStr}</div></td>
       <td class="${gc}">${a.hasPx?pc(a.pnlPct):'—'}</td>
       <td class="${gc}" style="font-weight:700">${a.hasPx?(a.pnl>=0?'+':'')+( isARS(a.type)?$a(a.pnl*c):$u(a.pnl) ):'—'}</td>
       <td class="${gc}" style="font-weight:700">${totStr}</td>
