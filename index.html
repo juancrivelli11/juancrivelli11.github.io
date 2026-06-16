@@ -4438,8 +4438,9 @@ function saveOrder(){
   const isCompra = actVal === 'Compra';
   const userNotes = el('oNotes').value || '';
   const finalNotes = isGasto ? (userNotes ? `Gasto/Retiro: ${userNotes}` : 'Gasto/Retiro') : userNotes;
+  const parentOrderId = Date.now();
   orders.push({
-    id:Date.now(),ticker,type,
+    id:parentOrderId,ticker,type,
     action:isCompra?'Compra':'Venta',
     qty,price:priceUSD,priceOrig:isGasto?1:price,
     currency:isA?'ARS':'USD',cclAtOrder:isA?c:null,
@@ -4491,7 +4492,8 @@ function saveOrder(){
         comm:0,
         broker,date:orderDate,
         notes:`Auto: ${isCompra?'compra':'venta'} de ${ticker}`,
-        auto:true
+        auto:true,
+        auto_parent_id: parentOrderId, // referencia para borrarla en cascada
       });
     }
   }
@@ -4562,7 +4564,35 @@ function saveEditOrder(){
   };
   save(); closeOverlay('edit'); render();
 }
-function delOrder(id){orders=orders.filter(o=>String(o.id)!==String(id));save();render();}
+function delOrder(id){
+  const sid = String(id);
+  // Buscar la orden a borrar para detectar órdenes auto-vinculadas (contra-asiento de liquidez).
+  const target = orders.find(o => String(o.id) === sid);
+  // Fallback heurístico para órdenes viejas que no tienen auto_parent_id:
+  // si el target no es auto, buscar autos del mismo broker, misma fecha, cuyas notas mencionen el ticker.
+  const autoChildren = orders.filter(o => {
+    if(!o.auto) return false;
+    if(String(o.auto_parent_id || '') === sid) return true; // link directo
+    // Heurística legacy
+    if(target && !target.auto){
+      const sameBroker = (o.broker||'').toLowerCase() === (target.broker||'').toLowerCase();
+      const sameDate   = (o.date||'') === (target.date||'');
+      const notesMatch = (o.notes||'').includes(target.ticker);
+      return sameBroker && sameDate && notesMatch;
+    }
+    return false;
+  });
+  let cascadeCount = autoChildren.length;
+  if(cascadeCount > 0){
+    const ok = confirm(`Esta orden tiene ${cascadeCount} contra-asiento${cascadeCount>1?'s':''} de liquidez auto-generado${cascadeCount>1?'s':''} (${autoChildren.map(o=>o.ticker).join(', ')}).\n\n¿Borrar también las órdenes de liquidez vinculadas para mantener consistencia?\n\n→ Aceptar: borra la orden y sus auto-órdenes.\n→ Cancelar: borra solo esta orden (la liquidez queda como está).`);
+    if(!ok) cascadeCount = 0;
+  }
+  const idsToRemove = new Set([sid]);
+  if(cascadeCount > 0) autoChildren.forEach(o => idsToRemove.add(String(o.id)));
+  orders = orders.filter(o => !idsToRemove.has(String(o.id)));
+  save();
+  render();
+}
 function delTicker(ticker){orders=orders.filter(o=>o.ticker!==ticker);save();render();}
 function goTV(ticker,type){
   const sym=type==='Acción Argentina'?`BCBA:${ticker}`:type==='Cripto'?`BINANCE:${ticker}USDT`:ticker;
