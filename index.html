@@ -1804,9 +1804,15 @@ async function detectAndRegisterDividends(){
       if(idx >= eligible.length) break;
       const a = eligible[idx];
       try{
-        const symbol = yahooSymbolFor(a.ticker, a.type);
-        const divs = await fetchDividends(symbol, 5);
-        if(divs && divs.length){
+        // Para CEDEAR y Acción Argentina/Bono usamos el ticker .BA — el dividendo
+        // por unidad en pesos ya viene con el ratio CEDEAR aplicado por la BCBA.
+        // Para US stocks/ETFs usamos el ticker base (USD por acción).
+        const useArgDiv = /CEDEAR|Argentina|Bono/i.test(a.type || '');
+        const symbol = useArgDiv ? `${a.ticker}.BA` : a.ticker;
+        const divResult = await fetchDividends(symbol, 5);
+        const divs = divResult?.items || [];
+        const divCurrency = divResult?.currency || 'USD'; // 'ARS' si .BA, 'USD' si US
+        if(divs.length){
           // Brokers donde tiene este ticker
           const brokerList = [...new Set(orders
             .filter(o => o.ticker === a.ticker && o.broker && !o.dividend && !o.expense)
@@ -1820,12 +1826,15 @@ async function detectAndRegisterDividends(){
               // Cantidad poseída al momento del dividendo
               const qtyHeld = qtyAtDate(a.ticker, brk, div.date);
               if(qtyHeld <= 0) continue;
-              // Cálculos
-              const grossUSD = qtyHeld * div.amount;
+              // Cálculos — convertir el amount a USD si Yahoo lo devolvió en ARS
+              const cclAtDiv = ccl(); // simplificación: usamos CCL actual
+              const perShareUSD = divCurrency === 'ARS' ? div.amount / cclAtDiv : div.amount;
+              const grossUSD = qtyHeld * perShareUSD;
+              // Sanity check: dividendos > $1M USD son improbables y casi seguro un bug
+              if(grossUSD > 1_000_000){ console.warn(`Div absurdo detectado, saltando:`, a.ticker, grossUSD); continue; }
               const taxRate  = getDividendTaxRate(a.type, brk);
               const netUSD   = grossUSD * (1 - taxRate);
               const brokerCur= getBrokerCurrency(brk);
-              const cclAtDiv = ccl(); // simplificación: usamos CCL actual
               const liqTicker = brokerCur === 'ARS' ? 'ARS' : 'USD';
               const orderQty  = brokerCur === 'ARS' ? netUSD * cclAtDiv : netUSD;
               orders.push({
@@ -1842,12 +1851,16 @@ async function detectAndRegisterDividends(){
                 comm: 0,
                 broker: brk,
                 date: div.date,
-                notes: `💰 Dividendo ${a.ticker}: ${qtyHeld.toFixed(4)} × $${n2(div.amount,4)} = bruto $${n2(grossUSD,2)} USD · ret. ${n2(taxRate*100,0)}% = neto $${n2(netUSD,2)} USD`,
+                notes: divCurrency === 'ARS'
+                  ? `💰 Dividendo ${a.ticker}: ${qtyHeld.toFixed(4)} × $${n2(div.amount,4)} ARS = bruto $${n2(grossUSD*cclAtDiv,0)} ARS (${$u(grossUSD)}) · ret. ${n2(taxRate*100,0)}% = neto $${n2(netUSD*cclAtDiv,0)} ARS (${$u(netUSD)})`
+                  : `💰 Dividendo ${a.ticker}: ${qtyHeld.toFixed(4)} × $${n2(div.amount,4)} = bruto $${n2(grossUSD,2)} USD · ret. ${n2(taxRate*100,0)}% = neto $${n2(netUSD,2)} USD`,
                 dividend: true,
                 dividendTicker: a.ticker,
                 dividendAssetType: a.type,
                 dividendQtyHeld: qtyHeld,
-                dividendPerShare: div.amount,
+                dividendPerShare: perShareUSD, // ya convertido a USD para consistencia interna
+                dividendPerShareOrig: div.amount, // por las dudas, guardamos el original
+                dividendOrigCurrency: divCurrency,
                 dividendGrossUSD: grossUSD,
                 dividendTaxRate: taxRate,
                 dividendNetUSD: netUSD,
@@ -3795,14 +3808,16 @@ async function fetchDividends(symbol, rangeYears=5){
       const r = await fetch(proxy(url));
       if(!r.ok) continue;
       const d = await r.json();
-      const divs = d?.chart?.result?.[0]?.events?.dividends;
-      if(!divs) return [];
-      const out = Object.values(divs).map(x => ({
+      const result = d?.chart?.result?.[0];
+      const divs = result?.events?.dividends;
+      const currency = result?.meta?.currency || 'USD'; // ARS para .BA, USD para US
+      if(!divs) return { items: [], currency };
+      const items = Object.values(divs).map(x => ({
         date: new Date((x.date||0)*1000).toISOString().slice(0,10),
         amount: x.amount,
         ts: x.date,
       })).sort((a,b) => a.ts - b.ts);
-      return out;
+      return { items, currency };
     } catch(e){}
   }
   return null;
