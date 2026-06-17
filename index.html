@@ -344,10 +344,43 @@ body.dark #auth-welcome h2{color:#90caf9}
 </div>
 <!-- AUTH WELCOME (visible cuando no hay sesión) -->
 <div id="auth-welcome">
-  <div class="aw-icon">🔐</div>
-  <h2>Bienvenido a CriFund</h2>
-  <p>Llevá el control de todas tus inversiones en un solo lugar.<br>Iniciá sesión o creá una cuenta para empezar.</p>
-  <button class="btn btn-green" onclick="openOverlay('login')">Iniciar sesión / Registrarme</button>
+  <div class="aw-icon">📊</div>
+  <h2>Tu portfolio financiero, todo en un lugar</h2>
+  <p style="max-width:520px">Hecha para inversores argentinos. Trackea CEDEARs, acciones US y argentinas, cripto, bonos y liquidez en múltiples brokers — con cálculos pensados para la realidad local.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;max-width:740px;width:100%;margin:20px 0 30px">
+    <div style="background:var(--card);border:1px solid var(--blueL);border-radius:10px;padding:16px;text-align:left">
+      <div style="font-size:24px;margin-bottom:6px">💰</div>
+      <div style="font-weight:700;color:var(--blue);font-size:14px;margin-bottom:4px">Multi-broker, multi-moneda</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.4">IOL, Bull, Galicia, Binance, IB, Nexo y los que sumes. Cada uno en su moneda real, con CCL/MEP/Blue siempre actualizado.</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--blueL);border-radius:10px;padding:16px;text-align:left">
+      <div style="font-size:24px;margin-bottom:6px">📈</div>
+      <div style="font-weight:700;color:var(--blue);font-size:14px;margin-bottom:4px">Rendimiento real (TIR)</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.4">PPC histórico en pesos, TIR anualizada considerando ventas parciales y reinversiones. Ni Excel ni tu broker hacen esto.</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--blueL);border-radius:10px;padding:16px;text-align:left">
+      <div style="font-size:24px;margin-bottom:6px">💸</div>
+      <div style="font-weight:700;color:var(--blue);font-size:14px;margin-bottom:4px">Dividendos automáticos</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.4">La app detecta pagos de tus activos, calcula retenciones por broker y proyecta los próximos 3 meses.</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--blueL);border-radius:10px;padding:16px;text-align:left">
+      <div style="font-size:24px;margin-bottom:6px">👥</div>
+      <div style="font-weight:700;color:var(--blue);font-size:14px;margin-bottom:4px">Multi-portfolio</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.4">Llevá varios portfolios separados (familia, clientes, escritorios). Cada uno con sus brokers, órdenes y watchlist propias.</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--blueL);border-radius:10px;padding:16px;text-align:left">
+      <div style="font-size:24px;margin-bottom:6px">👁</div>
+      <div style="font-weight:700;color:var(--blue);font-size:14px;margin-bottom:4px">Watchlist con OCR</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.4">Subí una captura de tu broker y la app extrae los tickers solita. O cargá CSV. O pegá una lista.</div>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--blueL);border-radius:10px;padding:16px;text-align:left">
+      <div style="font-size:24px;margin-bottom:6px">📊</div>
+      <div style="font-weight:700;color:var(--blue);font-size:14px;margin-bottom:4px">Fundamentales y gráficos</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.4">Click en cualquier ticker: PER, EPS, márgenes, evolución de precio, dividendos históricos. Todo en un modal.</div>
+    </div>
+  </div>
+  <button class="btn btn-green" onclick="openOverlay('login')" style="font-size:16px;padding:16px 40px">Crear cuenta gratis</button>
+  <p style="font-size:11px;color:var(--muted);margin-top:14px">Gratis · Sin tarjeta · Tus datos en tus dispositivos.</p>
 </div>
 <!-- SUMMARY -->
 <div class="summary">
@@ -760,6 +793,33 @@ body.dark #auth-welcome h2{color:#90caf9}
   </div>
 </div>
 </div>
+<!-- ONBOARDING OVERLAY (usuario nuevo) -->
+<div class="overlay" id="overlay-onboard">
+<div class="modal" style="max-width:560px;max-height:92vh;overflow-y:auto">
+  <div class="modal-hdr">
+    <h2>👋 Bienvenido a CriFund</h2>
+  </div>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+    Para empezar, elegí los brokers en los que operás. Vas a poder agregar, sacar o modificar después en la pestaña <strong>Brokers</strong>.
+  </p>
+  <div style="margin-bottom:10px">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">🇦🇷 Argentinos</div>
+    <div id="onbBrokersAR" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+  </div>
+  <div style="margin-bottom:10px">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">🌐 Internacionales / Cripto</div>
+    <div id="onbBrokersUSD" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+  </div>
+  <div style="margin-bottom:14px">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">➕ Otro broker (opcional)</div>
+    <input id="onbCustomBroker" placeholder="Ej: Mi banco / Caja fuerte" style="width:100%;padding:8px;border:1px solid var(--blueL);border-radius:6px;background:var(--card);color:var(--txt);font-size:13px">
+  </div>
+  <div class="modal-btns">
+    <button class="btn btn-green" onclick="completeOnboarding()">✓ Empezar</button>
+    <button class="btn btn-ghost" onclick="skipOnboarding()">Omitir (usar todos los defaults)</button>
+  </div>
+</div>
+</div>
 <!-- PIE CHART EXPANDED OVERLAY -->
 <div class="overlay" id="overlay-pie">
 <div class="modal" style="max-width:900px;max-height:92vh;overflow-y:auto">
@@ -886,7 +946,7 @@ body.dark #auth-welcome h2{color:#90caf9}
     <button class="btn btn-blue" onclick="signUp()">Registrarme</button>
   </div>
   <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px">
-    Sin cuenta los datos se guardan solo en este browser.
+    Tus datos se sincronizan en todos tus dispositivos.
   </p>
 </div>
 </div>
@@ -1305,23 +1365,68 @@ async function signIn(){
   const email = document.getElementById('authEmail').value.trim();
   const pass  = document.getElementById('authPass').value;
   const msg   = document.getElementById('authMsg');
-  msg.style.color = 'var(--red)';
+  if(!email || !email.includes('@')){ msg.style.color='var(--red)'; msg.textContent = 'Email inválido'; return; }
+  if(!pass){ msg.style.color='var(--red)'; msg.textContent = 'Ingresá tu contraseña'; return; }
+  msg.style.color = 'var(--muted)';
   msg.textContent = 'Ingresando...';
-  const { data, error } = await supa.auth.signInWithPassword({email, password:pass});
-  if(error){ msg.textContent = error.message; return; }
-  closeOverlay('login');
-  await onLogin(data.user);
+  document.querySelectorAll('#overlay-login .btn').forEach(b => b.disabled = true);
+  try{
+    const { data, error } = await supa.auth.signInWithPassword({email, password:pass});
+    if(error){ msg.style.color='var(--red)'; msg.textContent = humanizeAuthError(error); return; }
+    closeOverlay('login');
+    await onLogin(data.user);
+  } finally {
+    document.querySelectorAll('#overlay-login .btn').forEach(b => b.disabled = false);
+  }
 }
 async function signUp(){
   const email = document.getElementById('authEmail').value.trim();
   const pass  = document.getElementById('authPass').value;
   const msg   = document.getElementById('authMsg');
-  if(pass.length < 6){ msg.textContent = 'La contraseña debe tener al menos 6 caracteres'; return; }
+  if(!email || !email.includes('@')){ msg.style.color='var(--red)'; msg.textContent = 'Email inválido'; return; }
+  if(pass.length < 6){ msg.style.color='var(--red)'; msg.textContent = 'La contraseña debe tener al menos 6 caracteres'; return; }
+  msg.style.color = 'var(--muted)';
   msg.textContent = 'Creando cuenta...';
-  const { error } = await supa.auth.signUp({email, password:pass});
-  if(error){ msg.textContent = error.message; return; }
-  msg.style.color = 'var(--green)';
-  msg.textContent = '✓ Revisá tu email para confirmar la cuenta.';
+  // Deshabilitar botones para evitar dobles clicks
+  document.querySelectorAll('#overlay-login .btn').forEach(b => b.disabled = true);
+  try{
+    const { data, error } = await supa.auth.signUp({email, password:pass});
+    if(error){ msg.style.color='var(--red)'; msg.textContent = humanizeAuthError(error); return; }
+    // Si Supabase devolvió sesión inmediatamente (confirmación de email desactivada),
+    // auto-loguear al usuario en vez de pedirle que revise el mail.
+    if(data?.session && data?.user){
+      msg.style.color = 'var(--green)';
+      msg.textContent = '✓ Cuenta creada. Ingresando...';
+      closeOverlay('login');
+      await onLogin(data.user);
+      return;
+    }
+    // Si NO hay sesión, Supabase está pidiendo confirmación por email.
+    // Intentar signIn por las dudas (a veces ya autoconfirma).
+    const signInRes = await supa.auth.signInWithPassword({email, password:pass});
+    if(signInRes.data?.user && !signInRes.error){
+      msg.style.color = 'var(--green)';
+      msg.textContent = '✓ Cuenta creada. Ingresando...';
+      closeOverlay('login');
+      await onLogin(signInRes.data.user);
+      return;
+    }
+    msg.style.color = 'var(--green)';
+    msg.textContent = '✓ Cuenta creada. Revisá tu email para confirmar y después tocá "Ingresar".';
+  } finally {
+    document.querySelectorAll('#overlay-login .btn').forEach(b => b.disabled = false);
+  }
+}
+// Convierte errores técnicos de Supabase en mensajes user-friendly
+function humanizeAuthError(error){
+  const m = (error?.message || '').toLowerCase();
+  if(m.includes('invalid login')) return 'Email o contraseña incorrectos.';
+  if(m.includes('user already registered') || m.includes('already exists')) return 'Ya existe una cuenta con ese email. Tocá "Ingresar".';
+  if(m.includes('email rate limit')) return 'Demasiados intentos. Esperá unos minutos.';
+  if(m.includes('weak password') || m.includes('at least')) return 'La contraseña es muy débil. Usá 8+ caracteres con números.';
+  if(m.includes('invalid email')) return 'El email no tiene un formato válido.';
+  if(m.includes('network')) return 'Sin conexión a internet o el servicio no responde. Probá de nuevo.';
+  return error?.message || 'Error desconocido. Intentá de nuevo.';
 }
 async function onLogin(user){
   currentUser = user;
@@ -1334,6 +1439,59 @@ async function onLogin(user){
   await supaLoad();
   setTimeout(loadSidebar, 200);
   if(getPortfolio().length) doRefresh();
+  // Onboarding: si el usuario es nuevo (no tiene órdenes ni datos previos),
+  // mostrar el flujo de bienvenida para que elija sus brokers.
+  if(!localStorage.getItem('pf6_onboarded') && orders.length === 0){
+    setTimeout(openOnboarding, 400);
+  }
+}
+
+// === ONBOARDING ===
+function openOnboarding(){
+  const ar = document.getElementById('onbBrokersAR');
+  const usd = document.getElementById('onbBrokersUSD');
+  if(!ar || !usd) return;
+  const ARG_BROKERS = ['IOL Argentina','IOL Dólares','Bull Market','Galicia','PPI','Balanz','Santander','IOL Crypto'];
+  const INTL_BROKERS = ['Binance','Interactive Brokers','Lemon','Nexo','Gate.io','Kucoin','TDA'];
+  const renderChip = (name, container) => {
+    const div = document.createElement('div');
+    div.className = 'onb-chip';
+    div.dataset.broker = name;
+    div.style.cssText = 'padding:6px 12px;border:1px solid var(--blueL);border-radius:20px;cursor:pointer;font-size:12px;background:var(--card);user-select:none;transition:all 0.15s';
+    const logo = getBrokerLogo(name);
+    div.innerHTML = `${logo?`<img src="${logo}" style="width:14px;height:14px;vertical-align:middle;border-radius:2px;margin-right:4px" onerror="this.style.display='none'">`:''}${name}`;
+    div.onclick = () => {
+      const sel = div.classList.toggle('selected');
+      div.style.background = sel ? 'var(--green)' : 'var(--card)';
+      div.style.color = sel ? '#fff' : 'var(--txt)';
+      div.style.borderColor = sel ? 'var(--green)' : 'var(--blueL)';
+    };
+    container.appendChild(div);
+  };
+  ar.innerHTML = '';
+  usd.innerHTML = '';
+  ARG_BROKERS.forEach(b => renderChip(b, ar));
+  INTL_BROKERS.forEach(b => renderChip(b, usd));
+  openOverlay('onboard');
+}
+
+function completeOnboarding(){
+  const selected = [...document.querySelectorAll('.onb-chip.selected')].map(c => c.dataset.broker);
+  const custom = (document.getElementById('onbCustomBroker').value || '').trim();
+  if(custom) selected.push(custom);
+  if(selected.length){
+    brokers = selected;
+  }
+  localStorage.setItem('pf6_onboarded', '1');
+  closeOverlay('onboard');
+  save();
+  render();
+  setStatus(`✓ Listo. Cargá tu primera orden desde "+ Nueva orden".`, false);
+}
+
+function skipOnboarding(){
+  localStorage.setItem('pf6_onboarded', '1');
+  closeOverlay('onboard');
 }
 function clearAllLocalData(){
   // Borra TODO lo que pueda contener datos del usuario logueado.
@@ -3055,7 +3213,8 @@ function renderOrders(){
       </div>
     </div>
     ${o.notes?`<div style="font-size:11px;color:var(--muted);margin-top:6px;font-style:italic">${o.notes}</div>`:''}
-    <div style="text-align:right;margin-top:6px">
+    <div style="text-align:right;margin-top:6px;display:flex;justify-content:flex-end;gap:8px">
+      ${(!o.auto && !o.dividend) ? `<button style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:12px" onclick="openEditOrderById('${o.id}')" title="Editar esta orden">✏️ Editar</button>` : ''}
       <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px" onclick="delOrder('${o.id}')">✕ Eliminar</button>
     </div>`;
     el2.appendChild(div);
@@ -4540,6 +4699,27 @@ function quickOrder(ticker,type,action){
 // ═══════════════════════════════════════════════════════════════════════════
 // ACTIONS
 // ═══════════════════════════════════════════════════════════════════════════
+// Abre el modal de edición para UNA orden específica por id.
+// Útil desde la pestaña Órdenes donde el usuario quiere editar exactamente esa.
+function openEditOrderById(id){
+  const o = orders.find(x => String(x.id) === String(id));
+  if(!o){ alert('Orden no encontrada'); return; }
+  if(o.auto){ alert('No podés editar una orden auto-generada (contra-asiento de liquidez). Editá la orden principal y la auto se recalcula sola.'); return; }
+  if(o.dividend){ alert('No podés editar un dividendo auto-detectado. Borralo si está mal y se va a regenerar.'); return; }
+  el('editOrderId').value = String(o.id);
+  el('editOrderTitle').textContent = `Editar: ${o.action} ${o.ticker} (${o.date||'—'})`;
+  el('editQty').value = o.qty;
+  el('editPriceLbl').textContent = o.currency==='ARS' ? 'Precio (ARS)' : 'Precio (USD)';
+  el('editPrice').value = o.currency==='ARS' ? (o.priceOrig||o.price*(o.cclAtOrder||ccl())) : o.price;
+  el('editComm').value = o.comm||0;
+  el('editDate').value = o.date;
+  el('editNotes').value = o.notes||'';
+  const sel = el('editBroker');
+  sel.innerHTML = '<option value="">— Seleccionar —</option>';
+  brokers.forEach(b => sel.innerHTML += `<option value="${b}" ${o.broker===b?'selected':''}>${b}</option>`);
+  openOverlay('edit');
+}
+
 function editLastOrder(ticker){
   // Find most recent order for this ticker
   const tickerOrders = orders.filter(o=>o.ticker===ticker).sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -4568,15 +4748,75 @@ function saveEditOrder(){
   const qty = parseFloat(el('editQty').value);
   const price = parseFloat(el('editPrice').value);
   if(!qty||!price){ alert('Faltan datos'); return; }
-  // Recalculate USD price if ARS order
+  // Recalcular USD price si la orden es ARS
   const priceUSD = o.currency==='ARS' ? price/(o.cclAtOrder||ccl()) : price;
   const commRaw = parseFloat(el('editComm').value)||0;
   const commUSD = o.currency==='ARS' ? commRaw/(o.cclAtOrder||ccl()) : commRaw;
+  const newBroker = el('editBroker').value;
+  const newDate   = el('editDate').value||o.date;
   orders[idx] = {...o, qty, price:priceUSD, priceOrig:price, comm:commUSD,
-    broker:el('editBroker').value,
-    date:el('editDate').value||o.date,
-    notes:el('editNotes').value
+    broker: newBroker,
+    date: newDate,
+    notes: el('editNotes').value
   };
+  // === Re-sync de contra-asientos de liquidez auto-generados ===
+  // Si esta orden tiene auto-órdenes vinculadas (por auto_parent_id), recalcular
+  // sus qty/price para reflejar el nuevo total. Si no las tiene pero antes había
+  // (broker viejo + fecha vieja + notas), borramos las legacy y dejamos sin auto.
+  const parentId = String(o.id);
+  const isParentEligible = !o.dividend && !o.expense && !o.auto && !isCash(o.ticker);
+  // Borrar auto-children por link directo
+  let linkedChildren = orders.filter(x => String(x.auto_parent_id||'') === parentId);
+  // Sumar también heurísticas legacy (mismo broker viejo, misma fecha vieja, notas mencionan ticker)
+  const legacyChildren = orders.filter(x => {
+    if(!x.auto) return false;
+    if(linkedChildren.includes(x)) return false;
+    const sameBroker = (x.broker||'').toLowerCase() === (o.broker||'').toLowerCase();
+    const sameDate   = (x.date||'') === (o.date||'');
+    const notesMatch = (x.notes||'').includes(o.ticker);
+    return sameBroker && sameDate && notesMatch;
+  });
+  const allChildren = [...linkedChildren, ...legacyChildren];
+  if(isParentEligible && allChildren.length){
+    // Borrar las auto-órdenes viejas y regenerar UNA nueva basada en los datos editados
+    const childIds = new Set(allChildren.map(x => String(x.id)));
+    orders = orders.filter(x => !childIds.has(String(x.id)));
+    // Recalcular contra-asiento como hace saveOrder
+    const c = ccl();
+    const isCompra = orders[idx].action === 'Compra';
+    const isA = isARS(orders[idx].type);
+    const totalUSD = qty * priceUSD + commUSD;
+    const totalARS = totalUSD * (c || 1);
+    const brokerCur = getBrokerCurrency(newBroker);
+    const stableTickers = brokerCur === 'ARS' ? ['ARS','PESOS'] : ['USD','USDT','USDC'];
+    let liqTicker = null;
+    for(const st of stableTickers){
+      const stOrds = orders.filter(x => x.ticker===st && (x.broker||'').toLowerCase()===(newBroker||'').toLowerCase());
+      const stQty = stOrds.reduce((s,x) => s + (x.action==='Compra'?x.qty:-x.qty), 0);
+      if(stQty > 0){ liqTicker = st; break; }
+    }
+    if(!liqTicker && !isCompra) liqTicker = stableTickers[0];
+    if(newBroker && liqTicker){
+      const isLiqARS = liqTicker === 'ARS' || liqTicker === 'PESOS';
+      const adjQty   = isLiqARS ? totalARS : totalUSD;
+      const adjPrice = isLiqARS ? (c > 0 ? 1/c : 0) : 1;
+      orders.push({
+        id: Date.now() + Math.floor(Math.random()*1000),
+        ticker: liqTicker,
+        type: isLiqARS ? 'Acción Argentina' : (liqTicker==='USD' ? 'Acción USA' : 'Cripto'),
+        action: isCompra ? 'Venta' : 'Compra',
+        qty: adjQty, price: adjPrice, priceOrig: 1,
+        currency: isLiqARS ? 'ARS' : 'USD',
+        cclAtOrder: isLiqARS ? c : null,
+        comm: 0,
+        broker: newBroker,
+        date: newDate,
+        notes: `Auto: ${isCompra?'compra':'venta'} de ${o.ticker} (re-sync por edición)`,
+        auto: true,
+        auto_parent_id: o.id,
+      });
+    }
+  }
   save(); closeOverlay('edit'); render();
 }
 function delOrder(id){
@@ -4650,32 +4890,110 @@ function configFMP(){
 // ═══════════════════════════════════════════════════════════════════════════
 // IMPORT / EXPORT
 // ═══════════════════════════════════════════════════════════════════════════
+// Export v2: incluye TODOS los portfolios con sus datos completos (órdenes,
+// snapshots, brokers, watchlist, preferencias de moneda). El formato v1 era
+// {brokers, orders, snapshots} de un solo portfolio — sigue siendo importable
+// como legacy.
 function exportData(){
-  const data={version:1,exportedAt:new Date().toISOString(),brokers,orders,snapshots};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;
-  a.download=`crifund_backup_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();URL.revokeObjectURL(url);
+  // Asegurar que el portfolio actual está guardado antes de exportar
+  localSave();
+  const portfolioData = {};
+  let totalOrders = 0;
+  portfolios.forEach(p => {
+    const pOrders = JSON.parse(localStorage.getItem(`pf6_p_${p.id}_orders`) || '[]');
+    const pSnaps  = JSON.parse(localStorage.getItem(`pf6_p_${p.id}_snaps`)  || '[]');
+    const pBrokers = JSON.parse(localStorage.getItem(`pf6_p_${p.id}_brokers`) || JSON.stringify(DEFAULT_BROKERS));
+    const pWatch  = JSON.parse(localStorage.getItem(`pf6_p_${p.id}_watchlist`) || '[]');
+    const pBC     = JSON.parse(localStorage.getItem(`pf6_p_${p.id}_broker_currency`) || '{}');
+    portfolioData[p.id] = {
+      orders: pOrders, snapshots: pSnaps,
+      brokers: pBrokers, watchlist: pWatch,
+      brokerCurrencyPrefs: pBC,
+    };
+    totalOrders += pOrders.length;
+  });
+  const data = {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    currentPortfolioId,
+    portfolios,
+    portfolioData,
+    _legacy: { brokers, orders, snapshots }, // compat: para readers v1
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = `crifund_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+  alert(`✓ Backup descargado.\n\n${portfolios.length} portfolios · ${totalOrders} órdenes en total.`);
 }
+
 function importData(event){
-  const file=event.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
+  const file = event.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
     try{
-      const data=JSON.parse(e.target.result);
+      const data = JSON.parse(e.target.result);
+      // === Formato v2: multi-portfolio ===
+      if(data && data.version === 2 && Array.isArray(data.portfolios) && data.portfolioData){
+        const portCount = data.portfolios.length;
+        const orderCount = Object.values(data.portfolioData).reduce((s, p) => s + (p.orders?.length || 0), 0);
+        const date = data.exportedAt?.slice(0,10) || '?';
+        if(!confirm(`Importar backup v2 del ${date}?\n\n${portCount} portfolios · ${orderCount} órdenes en total\n\n⚠️ REEMPLAZA todos tus portfolios actuales y sus datos.`)) {
+          event.target.value = ''; return;
+        }
+        // Limpiar TODO lo de portfolios actuales
+        Object.keys(localStorage).forEach(k => {
+          if(k.startsWith('pf6_p_')) localStorage.removeItem(k);
+        });
+        // Setear nueva lista de portfolios
+        portfolios = data.portfolios;
+        currentPortfolioId = data.currentPortfolioId && portfolios.some(p => p.id === data.currentPortfolioId)
+          ? data.currentPortfolioId
+          : portfolios[0]?.id;
+        localStorage.setItem('pf6_portfolios', JSON.stringify(portfolios));
+        localStorage.setItem('pf6_currentPortfolio', currentPortfolioId);
+        // Restaurar cada portfolio
+        Object.entries(data.portfolioData).forEach(([pid, pd]) => {
+          if(Array.isArray(pd.orders))    localStorage.setItem(`pf6_p_${pid}_orders`,    JSON.stringify(pd.orders));
+          if(Array.isArray(pd.snapshots)) localStorage.setItem(`pf6_p_${pid}_snaps`,     JSON.stringify(pd.snapshots));
+          if(Array.isArray(pd.brokers))   localStorage.setItem(`pf6_p_${pid}_brokers`,   JSON.stringify(pd.brokers));
+          if(Array.isArray(pd.watchlist)) localStorage.setItem(`pf6_p_${pid}_watchlist`, JSON.stringify(pd.watchlist));
+          if(pd.brokerCurrencyPrefs && typeof pd.brokerCurrencyPrefs === 'object'){
+            localStorage.setItem(`pf6_p_${pid}_broker_currency`, JSON.stringify(pd.brokerCurrencyPrefs));
+          }
+        });
+        // Recargar state del portfolio activo
+        reloadStateFromCurrentPortfolio();
+        savePortfoliosList();
+        render();
+        alert(`✓ Import completo.\n${portCount} portfolios · ${orderCount} órdenes restauradas.`);
+        event.target.value = ''; return;
+      }
+      // === Formato v1: solo el portfolio actual ===
       if(Array.isArray(data)){
-        if(confirm(`Importar ${data.length} órdenes? Reemplaza los datos actuales.`)){
-          orders=data;save();render();alert(`✓ ${data.length} órdenes importadas`);
+        // Array suelto de órdenes (formato más viejo)
+        if(confirm(`Importar ${data.length} órdenes al portfolio "${getCurrentPortfolio()?.name}"?\n\n⚠️ REEMPLAZA las órdenes actuales de este portfolio.`)){
+          orders = data; save(); render();
+          alert(`✓ ${data.length} órdenes importadas en "${getCurrentPortfolio()?.name}".`);
         }
-      } else if(data.orders){
-        if(confirm(`Importar backup de ${data.exportedAt?.slice(0,10)||'?'}?\n${data.orders.length} órdenes\n\nReemplaza los datos actuales.`)){
-          orders=data.orders||[];snapshots=data.snapshots||[];brokers=data.brokers||DEFAULT_BROKERS;
-          save();render();alert(`✓ ${orders.length} órdenes importadas`);
+      } else if(data && (data.orders || data._legacy)){
+        const legacy = data._legacy || data;
+        const ords = legacy.orders || [];
+        if(confirm(`Importar backup v1 del ${data.exportedAt?.slice(0,10)||'?'}?\n\n${ords.length} órdenes\n\n⚠️ REEMPLAZA datos del portfolio actual "${getCurrentPortfolio()?.name}".\n\n(Si querés restaurar MÚLTIPLES portfolios, exportá uno nuevo desde una versión moderna de la app)`)){
+          orders = ords;
+          snapshots = legacy.snapshots || [];
+          brokers = legacy.brokers || JSON.parse(JSON.stringify(DEFAULT_BROKERS));
+          save(); render();
+          alert(`✓ ${orders.length} órdenes importadas en "${getCurrentPortfolio()?.name}".`);
         }
-      } else {alert('Formato no reconocido');}
-    }catch(err){alert('Error: '+err.message);}
-    event.target.value='';
+      } else {
+        alert('❌ Formato no reconocido.\n\nEl archivo debe ser un backup .json de CriFund (v1 o v2).');
+      }
+    } catch(err){
+      alert('❌ Error al importar: ' + err.message);
+    }
+    event.target.value = '';
   };
   reader.readAsText(file);
 }
