@@ -796,6 +796,47 @@ body.dark #auth-welcome h2{color:#90caf9}
   </div>
 </div>
 </div>
+<!-- BOTÓN FLOTANTE DE FEEDBACK -->
+<button id="btnFeedback" onclick="openFeedback()" title="Enviar feedback"
+  style="position:fixed;bottom:20px;right:20px;width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#1565c0,#42a5f5);color:#fff;border:none;cursor:pointer;font-size:22px;box-shadow:0 4px 14px rgba(0,0,0,0.22);z-index:150;display:flex;align-items:center;justify-content:center;transition:transform 0.15s">💬</button>
+<!-- FEEDBACK OVERLAY -->
+<div class="overlay" id="overlay-feedback">
+<div class="modal" style="max-width:520px">
+  <div class="modal-hdr">
+    <h2>💬 Enviar feedback</h2>
+    <button class="modal-x" onclick="closeOverlay('feedback')">×</button>
+  </div>
+  <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">
+    ¿Encontraste un bug, querés sugerir algo o tenés una pregunta? Mandanos un mensaje. Lo leemos todos.
+  </p>
+  <div class="field"><label>Tipo</label>
+    <select id="fbType">
+      <option value="bug">🐛 Bug / Algo no funciona</option>
+      <option value="sugerencia">💡 Sugerencia / Mejora</option>
+      <option value="pregunta">❓ Pregunta / Duda</option>
+      <option value="otro">📝 Otro</option>
+    </select>
+  </div>
+  <div class="field"><label>Descripción</label>
+    <textarea id="fbMessage" rows="6" placeholder="Contanos qué encontraste, qué te gustaría, dónde te confundió la app..."
+      style="width:100%;padding:10px;border:1px solid var(--blueL);border-radius:6px;font-family:inherit;font-size:13px;background:var(--card);color:var(--txt);resize:vertical"></textarea>
+  </div>
+  <div class="field"><label>Email de contacto (opcional)</label>
+    <input id="fbEmail" type="email" placeholder="tu@email.com">
+    <div style="font-size:10px;color:var(--muted);margin-top:4px">Para responderte si hace falta. Si te logueaste lo tomamos automáticamente.</div>
+  </div>
+  <div id="fbMsg" style="font-size:12px;min-height:18px;margin-bottom:8px"></div>
+  <div class="modal-btns">
+    <button class="btn btn-green" onclick="submitFeedback()" id="fbSubmit">Enviar</button>
+    <button class="btn btn-ghost" onclick="closeOverlay('feedback')">Cancelar</button>
+  </div>
+</div>
+</div>
+<style>
+  body.dark #btnFeedback{background:linear-gradient(135deg,#42a5f5,#1565c0)}
+  #btnFeedback:hover{transform:scale(1.08)}
+  body.logged-out #btnFeedback{display:none}
+</style>
 <!-- ONBOARDING OVERLAY (usuario nuevo) -->
 <div class="overlay" id="overlay-onboard">
 <div class="modal" style="max-width:560px;max-height:92vh;overflow-y:auto">
@@ -1495,6 +1536,80 @@ function completeOnboarding(){
 function skipOnboarding(){
   localStorage.setItem('pf6_onboarded', '1');
   closeOverlay('onboard');
+}
+
+// === FEEDBACK ===
+function openFeedback(){
+  // Pre-llenar email si está logueado
+  if(currentUser?.email){
+    el('fbEmail').value = currentUser.email;
+  }
+  el('fbMsg').textContent = '';
+  el('fbMsg').style.color = '';
+  openOverlay('feedback');
+}
+
+async function submitFeedback(){
+  const type = el('fbType').value;
+  const message = (el('fbMessage').value || '').trim();
+  const email = (el('fbEmail').value || '').trim();
+  const msgEl = el('fbMsg');
+  if(message.length < 5){
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'La descripción es muy corta. Contanos un poco más.';
+    return;
+  }
+  el('fbSubmit').disabled = true;
+  msgEl.style.color = 'var(--muted)';
+  msgEl.textContent = 'Enviando...';
+  // Payload con contexto útil para vos como dev
+  const payload = {
+    type,
+    message,
+    email: email || currentUser?.email || null,
+    user_id: currentUser?.id || null,
+    app_version: 'v2', // bump cuando cambies algo grande
+    user_agent: navigator.userAgent.slice(0,200),
+    portfolio_count: portfolios?.length || 0,
+    order_count: orders?.length || 0,
+    url: location.href,
+    created_at: new Date().toISOString(),
+  };
+  // Intentar guardar en Supabase. Si la tabla no existe, fallback a mailto.
+  let savedToSupabase = false;
+  if(currentUser){
+    try{
+      const { error } = await supa.from('feedback').insert(payload);
+      if(!error) savedToSupabase = true;
+      else console.warn('Feedback insert failed (tabla "feedback" probablemente no existe):', error.message);
+    } catch(e){ console.warn('Feedback Supabase error:', e); }
+  }
+  el('fbSubmit').disabled = false;
+  if(savedToSupabase){
+    msgEl.style.color = 'var(--green)';
+    msgEl.textContent = '✓ ¡Gracias! Recibí tu mensaje.';
+    setTimeout(() => {
+      closeOverlay('feedback');
+      el('fbMessage').value = '';
+      el('fbMsg').textContent = '';
+    }, 1500);
+  } else {
+    // Fallback: abrir mailto con el contenido
+    const subject = encodeURIComponent(`[CriFund] ${type}`);
+    const body = encodeURIComponent(
+      `Tipo: ${type}\n` +
+      `Email: ${payload.email || '(sin email)'}\n` +
+      `Versión: ${payload.app_version}\n` +
+      `Portfolios: ${payload.portfolio_count}\n` +
+      `Órdenes: ${payload.order_count}\n\n` +
+      `Mensaje:\n${message}`
+    );
+    msgEl.style.color = 'var(--gold)';
+    msgEl.innerHTML = `Abro tu cliente de email para enviarlo. <a href="mailto:juancrivelli11@gmail.com?subject=${subject}&body=${body}" style="color:var(--blue);text-decoration:underline">Click acá si no se abre solo</a>`;
+    setTimeout(() => {
+      window.location.href = `mailto:juancrivelli11@gmail.com?subject=${subject}&body=${body}`;
+    }, 200);
+  }
 }
 function clearAllLocalData(){
   // Borra TODO lo que pueda contener datos del usuario logueado.
@@ -3270,7 +3385,8 @@ function showBrokerDetail(name){
   const curBroker = getBrokerCurrency(name);
   const altCur = curBroker === 'ARS' ? 'USD' : 'ARS';
   const toggleBtn = `<button class="btn btn-ghost" style="margin-left:12px;padding:4px 10px;font-size:11px;vertical-align:middle" title="Cambiar moneda de visualización" onclick="setBrokerCurrency('${name.replace(/'/g,"\\'")}','${altCur}')">💱 Ver en ${altCur}</button><span style="font-size:11px;color:var(--muted);margin-left:6px;vertical-align:middle">(mostrando en ${curBroker})</span>`;
-  el('brokerDetailTitle').innerHTML=(bLogo?`<img src="${bLogo}" style="width:16px;height:16px;border-radius:3px;vertical-align:middle;margin-right:5px" onerror="this.style.display='none'">`:'')+name.toUpperCase()+toggleBtn;
+  const rebalanceBtn = `<button class="btn btn-ghost" style="margin-left:8px;padding:4px 10px;font-size:11px;vertical-align:middle;color:var(--gold)" title="Recalcula los contra-asientos de liquidez desde las órdenes reales (resuelve inconsistencias)" onclick="rebuildLiquidityForBroker('${name.replace(/'/g,"\\'")}')">🔧 Rebalancear liquidez</button>`;
+  el('brokerDetailTitle').innerHTML=(bLogo?`<img src="${bLogo}" style="width:16px;height:16px;border-radius:3px;vertical-align:middle;margin-right:5px" onerror="this.style.display='none'">`:'')+name.toUpperCase()+toggleBtn+rebalanceBtn;
   const pf=enrich(getPortfolio(name));
   const c=ccl();
   // Use cost as fallback when price not available
@@ -4894,6 +5010,99 @@ function deduplicateOrders(){
   const sortedIdx = [...toRemove].sort((a,b) => b-a);
   sortedIdx.forEach(i => orders.splice(i, 1));
   return toRemove.size;
+}
+
+// Recalcula las auto-órdenes de liquidez de UN broker desde cero.
+// 1) Borra todas las auto:true del broker.
+// 2) Para cada orden real (compra/venta de activo no-cash, no dividend, no expense),
+//    en orden cronológico, genera el contra-asiento de cash que corresponde.
+// Esto deja la liquidez 100% consistente con las operaciones reales, sin importar
+// qué haya pasado antes (deletes mal hechos, edits, duplicados, etc.).
+function rebuildLiquidityForBroker(brokerName){
+  if(!brokerName){ alert('Broker no válido'); return; }
+  const broker = brokerName;
+  // Contar autos viejos
+  const oldAutoCount = orders.filter(o => o.auto && (o.broker||'').toLowerCase() === broker.toLowerCase()).length;
+  // Confirmación
+  if(!confirm(`🔧 Rebalancear liquidez en "${broker}"\n\nEsta acción:\n• Borra los ${oldAutoCount} contra-asientos automáticos actuales de este broker.\n• Los regenera cronológicamente desde tus compras/ventas reales de activos.\n• NO toca tus depósitos manuales (Compras de USD/ARS/USDT directas) ni tus gastos/dividendos.\n• Útil cuando la liquidez quedó desfasada por borrados o ediciones previas.\n\n¿Continuar?`)) return;
+  // 1) Separar órdenes del broker / no del broker
+  const matchesBroker = o => (o.broker||'').toLowerCase().trim() === broker.toLowerCase().trim();
+  const otherBrokerOrds = orders.filter(o => !matchesBroker(o));
+  const thisBrokerOrds = orders.filter(matchesBroker);
+  // 2) Quedarse con NO autos (esas son las "reales")
+  const realOrds = thisBrokerOrds.filter(o => !o.auto);
+  // 3) Ordenar cronológicamente con Compra antes de Venta el mismo día
+  realOrds.sort((a, b) => {
+    const da = a.date || '', db = b.date || '';
+    if(da !== db) return da.localeCompare(db);
+    if(a.action !== b.action){
+      if(a.action === 'Compra') return -1;
+      if(b.action === 'Compra') return 1;
+    }
+    return (a.id||0) - (b.id||0);
+  });
+  // 4) Para cada orden, generar el contra-asiento si corresponde.
+  //    Mantenemos un balance simulado del cash del broker para decidir el liqTicker.
+  const brokerCur = getBrokerCurrency(broker);
+  const stableTickers = brokerCur === 'ARS' ? ['ARS','PESOS'] : ['USD','USDT','USDC'];
+  const newAutos = [];
+  // Balance simulado por ticker
+  const balances = {};
+  // Empezar con los balances de las órdenes reales (compras de cash manuales)
+  realOrds.forEach(o => {
+    if(isCash(o.ticker)){
+      const cur = o.ticker.toUpperCase();
+      if(!balances[cur]) balances[cur] = 0;
+      balances[cur] += (o.action === 'Compra' ? o.qty : -o.qty);
+    }
+  });
+  // Procesar generando autos para cada operación no-cash, no-dividend, no-expense
+  realOrds.forEach(o => {
+    if(isCash(o.ticker)) return;
+    if(o.dividend || o.expense) return;
+    // Calcular el monto del contra-asiento
+    const isCompra = o.action === 'Compra';
+    const c = o.cclAtOrder || ccl();
+    const totalUSD = (o.qty || 0) * (o.price || 0) + (o.comm || 0);
+    const totalARS = totalUSD * (c || 1);
+    // Elegir ticker de liquidez: el que tenga balance > 0, o el default del broker
+    let liqTicker = null;
+    for(const st of stableTickers){
+      if((balances[st] || 0) > 0){ liqTicker = st; break; }
+    }
+    if(!liqTicker && !isCompra) liqTicker = stableTickers[0]; // Ventas crean cash si no había
+    if(!liqTicker) return; // Compras sin liquidez: no auto-generamos (el user debe registrar el depósito)
+    const isLiqARS = liqTicker === 'ARS' || liqTicker === 'PESOS';
+    const adjQty = isLiqARS ? totalARS : totalUSD;
+    const adjPrice = isLiqARS ? (c > 0 ? 1/c : 0) : 1;
+    // Generar auto-orden
+    const auto = {
+      id: Date.now() + Math.floor(Math.random()*100000),
+      ticker: liqTicker,
+      type: isLiqARS ? 'Acción Argentina' : (liqTicker === 'USD' ? 'Acción USA' : 'Cripto'),
+      action: isCompra ? 'Venta' : 'Compra',
+      qty: adjQty,
+      price: adjPrice,
+      priceOrig: 1,
+      currency: isLiqARS ? 'ARS' : 'USD',
+      cclAtOrder: isLiqARS ? c : null,
+      comm: 0,
+      broker,
+      date: o.date,
+      notes: `Auto: ${isCompra?'compra':'venta'} de ${o.ticker} (regen)`,
+      auto: true,
+      auto_parent_id: o.id,
+    };
+    newAutos.push(auto);
+    // Actualizar balance simulado
+    if(!balances[liqTicker]) balances[liqTicker] = 0;
+    balances[liqTicker] += (auto.action === 'Compra' ? auto.qty : -auto.qty);
+  });
+  // 5) Reconstruir orders array
+  orders = [...otherBrokerOrds, ...realOrds, ...newAutos];
+  save();
+  render();
+  alert(`✓ Liquidez rebalanceada para "${broker}".\n\n${oldAutoCount} contra-asientos viejos borrados.\n${newAutos.length} contra-asientos nuevos generados.\n\nMirá las posiciones de cash en este broker — deberían reflejar la realidad.`);
 }
 
 // Versión "blanda" de detección: agrupa por (ticker, action, qty, date, broker)
