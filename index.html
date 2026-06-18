@@ -441,7 +441,10 @@ body.dark #auth-welcome h2{color:#90caf9}
     <div class="page" id="page-orders">
       <div class="sec-hdr">
         <span class="sec-title">HISTORIAL</span>
-        <button class="btn btn-green" onclick="openOverlay('order')">+ Nueva orden</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="findAndCleanDuplicates()" title="Detectar y limpiar órdenes duplicadas">🧹 Duplicados</button>
+          <button class="btn btn-green" onclick="openOverlay('order')">+ Nueva orden</button>
+        </div>
       </div>
       <div class="order-filters" id="orderFilters">
         <input id="filterTicker" type="text" placeholder="🔍 Buscar ticker..." oninput="applyOrderFilters()">
@@ -1571,14 +1574,24 @@ async function supaLoad(){
     const ordersByPid = {};
     portfolios.forEach(p => { ordersByPid[p.id] = []; });
     if(ords?.length){
+      // Dedupe a nivel de Supabase: el mismo id en data no debería aparecer 2 veces.
+      // Si aparece, conservamos la primera y descartamos las repetidas.
+      const seenIds = new Set();
+      let dupesFound = 0;
       ords.forEach(row => {
         const d = row.data || {};
         const pid = d.portfolio_id || currentPortfolioId;
         if(!ordersByPid[pid]) ordersByPid[pid] = [];
+        const key = `${pid}|${d.id}`;
+        if(seenIds.has(key)){ dupesFound++; return; } // duplicado por id dentro del mismo portfolio
+        seenIds.add(key);
         // Sacar portfolio_id del data antes de guardar (es metadata)
         const { portfolio_id, ...orderData } = d;
         ordersByPid[pid].push(orderData);
       });
+      if(dupesFound > 0){
+        console.warn(`Dedupe en supaLoad: ${dupesFound} órdenes duplicadas descartadas`);
+      }
     }
     portfolios.forEach(p => {
       localStorage.setItem(`pf6_p_${p.id}_orders`, JSON.stringify(ordersByPid[p.id] || []));
@@ -4821,46 +4834,128 @@ function saveEditOrder(){
 }
 function delOrder(id){
   const sid = String(id);
-  // Buscar la orden a borrar para detectar órdenes auto-vinculadas (contra-asiento de liquidez).
-  const target = orders.find(o => String(o.id) === sid);
-  if(!target){
+  // Buscar la orden a borrar por referencia (no por id) para soportar duplicados.
+  const targetIdx = orders.findIndex(o => String(o.id) === sid);
+  if(targetIdx === -1){
     console.warn('delOrder: orden no encontrada', sid);
     alert('No se encontró la orden a eliminar. Refrescá la página y probá de nuevo.');
     return;
   }
-  // Confirmar borrado (excepto para órdenes ya auto-generadas que se borran como children)
+  const target = orders[targetIdx];
+  // Confirmar borrado
   const niceLabel = target.dividend ? `dividendo de ${target.dividendTicker||target.ticker}`
                   : target.expense  ? `gasto/retiro de ${target.ticker}`
                   : target.auto     ? `contra-asiento auto de ${target.ticker}`
                   : `${target.action} ${target.qty} ${target.ticker}`;
-  if(!confirm(`¿Eliminar esta orden?\n\n${niceLabel}\n${target.date||''} · ${target.broker||'sin broker'}`)) return;
-  // Buscar auto-children: link directo + heurística legacy
-  const autoChildren = orders.filter(o => {
-    if(!o.auto) return false;
-    if(String(o.id) === sid) return false; // no incluir el target si es auto
-    if(String(o.auto_parent_id || '') === sid) return true;
+  // Detectar duplicados con mismo id (bug de versiones previas)
+  const dupes = orders.filter((o,i) => i !== targetIdx && String(o.id) === sid).length;
+  let dupeMsg = '';
+  if(dupes > 0){
+    dupeMsg = `\n\n⚠️ Detecté ${dupes} duplicado(s) con el mismo id. Sólo se borra esta instancia (la que apretaste); los duplicados quedan.`;
+  }
+  if(!confirm(`¿Eliminar esta orden?\n\n${niceLabel}\n${target.date||''} · ${target.broker||'sin broker'}${dupeMsg}`)) return;
+  // Buscar auto-children por referencia (no por id) — saca el target del scope.
+  const autoChildrenIdx = [];
+  orders.forEach((o, i) => {
+    if(i === targetIdx) return; // no el target mismo
+    if(!o.auto) return;
+    if(String(o.auto_parent_id || '') === sid){ autoChildrenIdx.push(i); return; }
     if(target && !target.auto){
       const sameBroker = (o.broker||'').toLowerCase() === (target.broker||'').toLowerCase();
       const sameDate   = (o.date||'') === (target.date||'');
       const notesMatch = (o.notes||'').includes(target.ticker);
-      return sameBroker && sameDate && notesMatch;
+      if(sameBroker && sameDate && notesMatch) autoChildrenIdx.push(i);
     }
-    return false;
   });
-  // Siempre cascadear (consistencia de datos). El usuario ya confirmó la eliminación.
-  const idsToRemove = new Set([sid]);
-  autoChildren.forEach(o => idsToRemove.add(String(o.id)));
-  const beforeCount = orders.length;
-  orders = orders.filter(o => !idsToRemove.has(String(o.id)));
-  const afterCount = orders.length;
-  const removed = beforeCount - afterCount;
+  // Borrar por índice (la principal + sus children), de mayor a menor para no descolocar índices.
+  const idxsToRemove = [...new Set([targetIdx, ...autoChildrenIdx])].sort((a,b) => b-a);
+  idxsToRemove.forEach(i => orders.splice(i, 1));
   save();
   render();
-  if(autoChildren.length > 0){
-    setStatus(`✓ Eliminada(s) ${removed} orden(es): la principal + ${autoChildren.length} contra-asiento(s) de liquidez`, false);
+  if(autoChildrenIdx.length > 0){
+    setStatus(`✓ Eliminada(s) ${idxsToRemove.length} orden(es): la principal + ${autoChildrenIdx.length} contra-asiento(s) de liquidez`, false);
   } else {
     setStatus(`✓ Orden eliminada`, false);
   }
+}
+
+// Detecta y deduplica órdenes con id repetido. Devuelve cuántas se removieron.
+// Estrategia: para cada grupo de duplicados, conserva la PRIMERA y borra las demás.
+function deduplicateOrders(){
+  const seen = new Map();
+  const toRemove = new Set();
+  orders.forEach((o, i) => {
+    const key = String(o.id);
+    if(seen.has(key)) toRemove.add(i);
+    else seen.set(key, i);
+  });
+  if(!toRemove.size) return 0;
+  // Remover de mayor a menor índice
+  const sortedIdx = [...toRemove].sort((a,b) => b-a);
+  sortedIdx.forEach(i => orders.splice(i, 1));
+  return toRemove.size;
+}
+
+// Versión "blanda" de detección: agrupa por (ticker, action, qty, date, broker)
+// para encontrar órdenes que son funcionalmente iguales aunque tengan id distinto.
+function findFunctionalDuplicates(){
+  const groups = new Map();
+  orders.forEach((o, i) => {
+    if(o.auto || o.dividend || o.expense) return; // saltar derivadas
+    const key = `${o.ticker}|${o.action}|${o.qty}|${o.date}|${o.broker||''}|${(o.price||0).toFixed(4)}`;
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(i);
+  });
+  const dupGroups = [...groups.values()].filter(arr => arr.length > 1);
+  return dupGroups;
+}
+
+function findAndCleanDuplicates(){
+  // 1) Buscar duplicados por id idéntico (bug serio)
+  const sameIdCount = (() => {
+    const seen = new Set();
+    let dups = 0;
+    orders.forEach(o => {
+      const k = String(o.id);
+      if(seen.has(k)) dups++; else seen.add(k);
+    });
+    return dups;
+  })();
+  // 2) Buscar duplicados funcionales (mismo ticker, action, qty, date, broker, price)
+  const funcGroups = findFunctionalDuplicates();
+  const funcDups = funcGroups.reduce((s, g) => s + (g.length - 1), 0);
+  if(sameIdCount === 0 && funcDups === 0){
+    alert('✓ No detecté duplicados en tus órdenes.');
+    return;
+  }
+  let msg = 'Detecté duplicados:\n\n';
+  if(sameIdCount > 0){
+    msg += `🔴 ${sameIdCount} órden(es) con ID repetido (bug serio — conviene limpiar)\n`;
+  }
+  if(funcDups > 0){
+    msg += `🟡 ${funcDups} órden(es) idénticas en ticker/qty/fecha/broker (posibles duplicados accidentales)\n`;
+    msg += `\nEjemplos:\n`;
+    funcGroups.slice(0, 3).forEach(g => {
+      const sample = orders[g[0]];
+      msg += `   • ${sample.action} ${sample.qty} ${sample.ticker} @ ${sample.date} (${g.length} copias)\n`;
+    });
+  }
+  msg += `\n¿Limpiar todos los duplicados?\n→ Aceptar: borra las copias, conserva una de cada grupo\n→ Cancelar: no toca nada`;
+  if(!confirm(msg)) return;
+  // Limpiar por id repetido
+  const removedById = deduplicateOrders();
+  // Limpiar funcionales (conservar la primera de cada grupo)
+  const funcIdxToRemove = [];
+  findFunctionalDuplicates().forEach(g => {
+    // g está ordenado por índice ascendente; conservar g[0], borrar el resto
+    for(let i = 1; i < g.length; i++) funcIdxToRemove.push(g[i]);
+  });
+  // Borrar de mayor a menor índice
+  funcIdxToRemove.sort((a,b) => b-a).forEach(i => orders.splice(i, 1));
+  const removedFunc = funcIdxToRemove.length;
+  save();
+  render();
+  alert(`✓ Limpieza completa.\n\n🔴 ${removedById} con id repetido\n🟡 ${removedFunc} funcionales`);
 }
 function delTicker(ticker){orders=orders.filter(o=>o.ticker!==ticker);save();render();}
 function goTV(ticker,type){
