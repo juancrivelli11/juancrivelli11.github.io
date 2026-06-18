@@ -4823,12 +4823,22 @@ function delOrder(id){
   const sid = String(id);
   // Buscar la orden a borrar para detectar órdenes auto-vinculadas (contra-asiento de liquidez).
   const target = orders.find(o => String(o.id) === sid);
-  // Fallback heurístico para órdenes viejas que no tienen auto_parent_id:
-  // si el target no es auto, buscar autos del mismo broker, misma fecha, cuyas notas mencionen el ticker.
+  if(!target){
+    console.warn('delOrder: orden no encontrada', sid);
+    alert('No se encontró la orden a eliminar. Refrescá la página y probá de nuevo.');
+    return;
+  }
+  // Confirmar borrado (excepto para órdenes ya auto-generadas que se borran como children)
+  const niceLabel = target.dividend ? `dividendo de ${target.dividendTicker||target.ticker}`
+                  : target.expense  ? `gasto/retiro de ${target.ticker}`
+                  : target.auto     ? `contra-asiento auto de ${target.ticker}`
+                  : `${target.action} ${target.qty} ${target.ticker}`;
+  if(!confirm(`¿Eliminar esta orden?\n\n${niceLabel}\n${target.date||''} · ${target.broker||'sin broker'}`)) return;
+  // Buscar auto-children: link directo + heurística legacy
   const autoChildren = orders.filter(o => {
     if(!o.auto) return false;
-    if(String(o.auto_parent_id || '') === sid) return true; // link directo
-    // Heurística legacy
+    if(String(o.id) === sid) return false; // no incluir el target si es auto
+    if(String(o.auto_parent_id || '') === sid) return true;
     if(target && !target.auto){
       const sameBroker = (o.broker||'').toLowerCase() === (target.broker||'').toLowerCase();
       const sameDate   = (o.date||'') === (target.date||'');
@@ -4837,16 +4847,20 @@ function delOrder(id){
     }
     return false;
   });
-  let cascadeCount = autoChildren.length;
-  if(cascadeCount > 0){
-    const ok = confirm(`Esta orden tiene ${cascadeCount} contra-asiento${cascadeCount>1?'s':''} de liquidez auto-generado${cascadeCount>1?'s':''} (${autoChildren.map(o=>o.ticker).join(', ')}).\n\n¿Borrar también las órdenes de liquidez vinculadas para mantener consistencia?\n\n→ Aceptar: borra la orden y sus auto-órdenes.\n→ Cancelar: borra solo esta orden (la liquidez queda como está).`);
-    if(!ok) cascadeCount = 0;
-  }
+  // Siempre cascadear (consistencia de datos). El usuario ya confirmó la eliminación.
   const idsToRemove = new Set([sid]);
-  if(cascadeCount > 0) autoChildren.forEach(o => idsToRemove.add(String(o.id)));
+  autoChildren.forEach(o => idsToRemove.add(String(o.id)));
+  const beforeCount = orders.length;
   orders = orders.filter(o => !idsToRemove.has(String(o.id)));
+  const afterCount = orders.length;
+  const removed = beforeCount - afterCount;
   save();
   render();
+  if(autoChildren.length > 0){
+    setStatus(`✓ Eliminada(s) ${removed} orden(es): la principal + ${autoChildren.length} contra-asiento(s) de liquidez`, false);
+  } else {
+    setStatus(`✓ Orden eliminada`, false);
+  }
 }
 function delTicker(ticker){orders=orders.filter(o=>o.ticker!==ticker);save();render();}
 function goTV(ticker,type){
