@@ -431,6 +431,10 @@ body.dark #auth-welcome h2{color:#90caf9}
         <span class="sec-title">MIS ACTIVOS</span>
         <button class="btn btn-green" onclick="openOverlay('order')">+ Nueva orden</button>
       </div>
+      <!-- Chips de filtro por tipo de activo -->
+      <div id="assetTypeFilters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+        <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-right:4px">Filtros:</span>
+      </div>
       <div id="assetTable"></div>
       <div id="cashSection" style="display:none;margin-top:12px">
         <div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:8px">💰 LIQUIDEZ</div>
@@ -1925,6 +1929,72 @@ function getDividendTaxRate(type, broker){
   return 0;
 }
 function isCash(ticker){ return CASH_LIST.includes((ticker||'').toUpperCase()); }
+// ═══════════════════════════════════════════════════════════════════════════
+// FILTROS POR TIPO DE ACTIVO (chips arriba de la tabla de activos)
+// ═══════════════════════════════════════════════════════════════════════════
+// Set de categorías ocultas. Persiste en localStorage.
+let hiddenAssetTypes = new Set(JSON.parse(localStorage.getItem('pf6_hiddenTypes') || '[]'));
+
+// Mapea un type interno a la categoría visible del chip.
+function typeToCategory(type){
+  const t = (type || '').toLowerCase();
+  if(t.includes('cripto'))    return 'Cripto';
+  if(t.includes('cedear'))    return 'CEDEAR';
+  if(t.includes('argentina')) return 'Argentina';
+  if(t.includes('bono'))      return 'Bono';
+  if(t.includes('etf'))       return 'USA'; // ETFs van con USA
+  if(t.includes('usa'))       return 'USA';
+  return 'USA'; // default
+}
+
+const CATEGORY_DEFINITIONS = [
+  { id: 'USA',       label: 'Acciones USA / ETF', icon: '🇺🇸' },
+  { id: 'CEDEAR',    label: 'CEDEARs',            icon: '🪙' },
+  { id: 'Argentina', label: 'Acciones AR',        icon: '🇦🇷' },
+  { id: 'Cripto',    label: 'Cripto',             icon: '₿'  },
+  { id: 'Bono',      label: 'Bonos',              icon: '📜' },
+];
+
+function toggleAssetType(category){
+  if(hiddenAssetTypes.has(category)) hiddenAssetTypes.delete(category);
+  else hiddenAssetTypes.add(category);
+  localStorage.setItem('pf6_hiddenTypes', JSON.stringify([...hiddenAssetTypes]));
+  render();
+}
+
+function resetAssetTypeFilters(){
+  hiddenAssetTypes = new Set();
+  localStorage.setItem('pf6_hiddenTypes', '[]');
+  render();
+}
+
+// Renderiza los chips. Sólo muestra las categorías que tienen al menos un activo.
+function renderAssetTypeFilters(pf){
+  const wrap = document.getElementById('assetTypeFilters');
+  if(!wrap) return;
+  // Detectar categorías presentes en el portafolio
+  const present = new Set();
+  pf.forEach(a => present.add(typeToCategory(a.type)));
+  // Si no hay nada, ocultar el row
+  if(!present.size){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+  // Construir HTML
+  let html = '<span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-right:4px">Filtrar:</span>';
+  CATEGORY_DEFINITIONS.forEach(cat => {
+    if(!present.has(cat.id)) return; // no mostrar categorías que no tenés
+    const isHidden = hiddenAssetTypes.has(cat.id);
+    const countInCat = pf.filter(a => typeToCategory(a.type) === cat.id).length;
+    const baseStyle = `padding:5px 11px;border-radius:18px;cursor:pointer;font-size:11px;font-weight:600;user-select:none;transition:all 0.15s;border:1px solid `;
+    const activeStyle  = `${baseStyle} var(--blueL);background:var(--blue);color:#fff`;
+    const inactiveStyle = `${baseStyle} var(--blueL);background:transparent;color:var(--muted);text-decoration:line-through;opacity:0.55`;
+    html += `<button onclick="toggleAssetType('${cat.id}')" style="${isHidden?inactiveStyle:activeStyle}" title="${isHidden?'Mostrar':'Ocultar'} ${cat.label}">${cat.icon} ${cat.label} <span style="font-size:9px;opacity:0.75">(${countInCat})</span></button>`;
+  });
+  if(hiddenAssetTypes.size > 0){
+    html += `<button onclick="resetAssetTypeFilters()" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:11px;text-decoration:underline;margin-left:6px">Mostrar todo</button>`;
+  }
+  wrap.innerHTML = html;
+}
+
 function getPortfolio(broker=null){
   const map={};
   // CRÍTICO: ordenar las órdenes cronológicamente por fecha antes de procesar.
@@ -2576,8 +2646,13 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
   // Separate cash from investments
   if(containerId==='assetTable') renderCash(pf, null);
   pf = pf.filter(a=>!isCash(a.ticker));
+  // Aplicar filtros por tipo (solo en vista global)
+  if(containerId === 'assetTable'){
+    renderAssetTypeFilters(pf);
+    pf = pf.filter(a => !hiddenAssetTypes.has(typeToCategory(a.type)));
+  }
   const el2=el(containerId);
-  if(!pf.length){el2.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div>Cargá una orden para empezar.</div></div>';return;}
+  if(!pf.length){el2.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div>Sin activos para mostrar con los filtros actuales.</div></div>';return;}
   const c=ccl();
   const wrap=document.createElement('div');wrap.className='tbl-wrap';
   const tbl=document.createElement('table');tbl.className='tbl';
