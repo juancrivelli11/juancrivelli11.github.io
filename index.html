@@ -4497,7 +4497,21 @@ let _pieModalCtx = null; // contexto inicial pasado al abrir
 // ═══════════════════════════════════════════════════════════════════════════
 // LIQUIDEZ POR BROKER MODAL
 // ═══════════════════════════════════════════════════════════════════════════
+// Filtro del modal de liquidez: 'all' | 'usd' | 'ars'
+let _liqFilter = 'all';
+
+function setLiqFilter(f){
+  _liqFilter = f;
+  renderLiquidezContent();
+}
+
 function openLiquidezModal(){
+  _liqFilter = 'all'; // reset al abrir
+  renderLiquidezContent();
+  openOverlay('liquidez');
+}
+
+function renderLiquidezContent(){
   const c = ccl();
   // Calcular liquidez por broker
   const byBroker = {};
@@ -4518,16 +4532,44 @@ function openLiquidezModal(){
     });
     if(Object.keys(positives).length) cleanData[brk] = positives;
   });
-  // Calcular totales globales (en USD)
+  // Aplicar filtro de broker por moneda
+  const filteredData = {};
+  Object.entries(cleanData).forEach(([brk, tickers]) => {
+    const brokerCurr = getBrokerCurrency(brk);
+    if(_liqFilter === 'usd' && brokerCurr !== 'USD') return;
+    if(_liqFilter === 'ars' && brokerCurr !== 'ARS') return;
+    filteredData[brk] = tickers;
+  });
+  // Conteos para los chips (sobre cleanData completo)
+  const cntAll = Object.keys(cleanData).length;
+  const cntUSD = Object.keys(cleanData).filter(brk => getBrokerCurrency(brk) === 'USD').length;
+  const cntARS = Object.keys(cleanData).filter(brk => getBrokerCurrency(brk) === 'ARS').length;
+  // Calcular totales globales del FILTRO (en USD)
   let totalUSD = 0, totalARS = 0;
-  Object.values(cleanData).forEach(tickers => {
+  Object.values(filteredData).forEach(tickers => {
     Object.entries(tickers).forEach(([t, q]) => {
       if(t === 'ARS' || t === 'PESOS'){ totalARS += q; totalUSD += q/c; }
       else { totalUSD += q; totalARS += q*c; }
     });
   });
-  // Render
-  el('liquidezTotalSummary').innerHTML = `
+  // Chips de filtro
+  const chipStyle = (active, color) => active
+    ? `padding:5px 12px;border:1px solid ${color};background:${color};color:#fff;border-radius:18px;font-size:11px;font-weight:600;cursor:pointer;user-select:none`
+    : `padding:5px 12px;border:1px solid var(--blueL);background:transparent;color:var(--muted);border-radius:18px;font-size:11px;font-weight:600;cursor:pointer;user-select:none`;
+  const chips = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-right:4px">Mostrar:</span>
+      <button onclick="setLiqFilter('all')" style="${chipStyle(_liqFilter==='all','var(--blue)')}">Todos <span style="font-size:9px;opacity:0.8">(${cntAll})</span></button>
+      <button onclick="setLiqFilter('usd')" style="${chipStyle(_liqFilter==='usd','#00a876')}">💵 Brokers USD <span style="font-size:9px;opacity:0.8">(${cntUSD})</span></button>
+      <button onclick="setLiqFilter('ars')" style="${chipStyle(_liqFilter==='ars','#f59f00')}">🇦🇷 Brokers ARS <span style="font-size:9px;opacity:0.8">(${cntARS})</span></button>
+    </div>
+  `;
+  // Header con summary + chips
+  const headerHeading = _liqFilter === 'usd' ? '💵 Liquidez en brokers USD'
+                       : _liqFilter === 'ars' ? '🇦🇷 Liquidez en brokers ARS'
+                       : '💰 Liquidez total';
+  el('liquidezTotalSummary').innerHTML = chips + `
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">${headerHeading}</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <div style="flex:1;min-width:140px;background:var(--blueLL);border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">Total en USD</div>
@@ -4541,18 +4583,20 @@ function openLiquidezModal(){
       </div>
     </div>
   `;
-  const brokersList = Object.keys(cleanData).sort((a, b) => {
-    // Ordenar por valor total USD descendente
-    const sumA = Object.entries(cleanData[a]).reduce((s,[t,q]) => s + (t==='ARS'||t==='PESOS' ? q/c : q), 0);
-    const sumB = Object.entries(cleanData[b]).reduce((s,[t,q]) => s + (t==='ARS'||t==='PESOS' ? q/c : q), 0);
+  const brokersList = Object.keys(filteredData).sort((a, b) => {
+    const sumA = Object.entries(filteredData[a]).reduce((s,[t,q]) => s + (t==='ARS'||t==='PESOS' ? q/c : q), 0);
+    const sumB = Object.entries(filteredData[b]).reduce((s,[t,q]) => s + (t==='ARS'||t==='PESOS' ? q/c : q), 0);
     return sumB - sumA;
   });
   if(!brokersList.length){
-    el('liquidezByBroker').innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted)">Sin liquidez registrada en ningún broker.</div>';
+    const emptyMsg = _liqFilter === 'usd' ? 'No tenés liquidez en brokers configurados como USD.'
+                    : _liqFilter === 'ars' ? 'No tenés liquidez en brokers configurados como ARS.'
+                    : 'Sin liquidez registrada en ningún broker.';
+    el('liquidezByBroker').innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted)">${emptyMsg}</div>`;
   } else {
     el('liquidezByBroker').innerHTML = brokersList.map(brk => {
       const logo = getBrokerLogo(brk);
-      const tickers = cleanData[brk];
+      const tickers = filteredData[brk];
       const brokerCurr = getBrokerCurrency(brk);
       const sumUSD = Object.entries(tickers).reduce((s,[t,q]) => s + (t==='ARS'||t==='PESOS' ? q/c : q), 0);
       const sumARS = sumUSD * c;
@@ -4578,7 +4622,6 @@ function openLiquidezModal(){
       </div>`;
     }).join('');
   }
-  openOverlay('liquidez');
 }
 
 function openPieModal(ctx){
