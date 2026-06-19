@@ -470,7 +470,10 @@ body.dark #auth-welcome h2{color:#90caf9}
     <!-- BROKERS -->
     <div class="page" id="page-brokers">
       <div id="brokerGridView">
-        <div class="sec-hdr"><span class="sec-title">MIS BROKERS</span></div>
+        <div class="sec-hdr">
+          <span class="sec-title">MIS BROKERS</span>
+          <button class="btn btn-ghost" style="padding:4px 10px;font-size:11px" onclick="showConsistencyReport()" title="Escanear cartera en busca de inconsistencias">🔍 Revisar consistencia</button>
+        </div>
         <div class="broker-grid" id="brokerGrid"></div>
         <div class="add-broker">
           <input id="newBrokerInput" placeholder="Agregar broker personalizado...">
@@ -4777,20 +4780,27 @@ function onTickerInput(val){
 }
 function pickTicker(t){el('oTicker').value=t;hideAC();}
 function hideAC(){el('acList').style.display='none';}
+// Lock global anti-double-click. Cualquier save bloquea entradas concurrentes.
+let _isSavingOrder = false;
 function saveOrder(){
+  if(_isSavingOrder){ console.log('saveOrder: ya hay un save en progreso, ignorando'); return; }
+  _isSavingOrder = true;
+  // Liberar el lock al final pase lo que pase
+  const releaseLock = () => { _isSavingOrder = false; };
+  try {
   const actVal=el('oAction').value;
   const isVenta=actVal==='Venta';
   const isGasto=actVal==='Gasto';
   const ticker=(isVenta||isGasto)?el('oSellTicker').value:el('oTicker').value.trim().toUpperCase();
   const qty=parseFloat(el('oQty').value);
   const price=isGasto?1:parseFloat(el('oPrice').value);
-  if(!ticker||!qty||(!isGasto && !price)){alert('Faltan datos obligatorios');return;}
+  if(!ticker||!qty||(!isGasto && !price)){alert('Faltan datos obligatorios');releaseLock();return;}
   if(isVenta||isGasto){
     const pf=getPortfolio();
     const held=pf.find(a=>a.ticker===ticker);
-    if(!held){alert(`No tenés ${ticker} en cartera`);return;}
-    if(qty>held.qty+0.0001){alert(`Solo tenés ${fmtQty(held.qty,held.type)} de ${ticker}`);return;}
-    if(isGasto && !isCash(ticker)){alert('Para "Gasto/Retiro" elegí un activo de liquidez (USD/ARS/USDT/USDC)');return;}
+    if(!held){alert(`No tenés ${ticker} en cartera`);releaseLock();return;}
+    if(qty>held.qty+0.0001){alert(`Solo tenés ${fmtQty(held.qty,held.type)} de ${ticker}`);releaseLock();return;}
+    if(isGasto && !isCash(ticker)){alert('Para "Gasto/Retiro" elegí un activo de liquidez (USD/ARS/USDT/USDC)');releaseLock();return;}
   }
   const mktVal=el('oMarket').value;
   const typeMap={usa:'Acción USA',cedear:'CEDEAR',arg:'Acción Argentina',cripto:'Cripto',bono:'Bono/Renta Fija',liquidez:'Acción USA'};
@@ -4876,6 +4886,9 @@ function saveOrder(){
     }
   }
   save();closeOverlay('order');resetOrder();render();doRefresh();
+  } finally {
+    releaseLock();
+  }
 }
 function resetOrder(){
   ['oQty','oPrice','oComm','oNotes','oTicker'].forEach(id=>el(id).value='');
@@ -4945,13 +4958,17 @@ function editLastOrder(ticker){
   openOverlay('edit');
 }
 function saveEditOrder(){
+  if(_isSavingOrder){ console.log('saveEditOrder: ya hay un save en progreso, ignorando'); return; }
+  _isSavingOrder = true;
+  const releaseLock = () => { _isSavingOrder = false; };
+  try {
   const id = el('editOrderId').value;
   const idx = orders.findIndex(o=>String(o.id)===id);
-  if(idx===-1){ alert('Orden no encontrada'); return; }
+  if(idx===-1){ alert('Orden no encontrada'); releaseLock(); return; }
   const o = orders[idx];
   const qty = parseFloat(el('editQty').value);
   const price = parseFloat(el('editPrice').value);
-  if(!qty||!price){ alert('Faltan datos'); return; }
+  if(!qty||!price){ alert('Faltan datos'); releaseLock(); return; }
   // Recalcular USD price si la orden es ARS
   const priceUSD = o.currency==='ARS' ? price/(o.cclAtOrder||ccl()) : price;
   const commRaw = parseFloat(el('editComm').value)||0;
@@ -5022,6 +5039,9 @@ function saveEditOrder(){
     }
   }
   save(); closeOverlay('edit'); render();
+  } finally {
+    releaseLock();
+  }
 }
 function delOrder(id){
   const sid = String(id);
@@ -5085,6 +5105,158 @@ function deduplicateOrders(){
   const sortedIdx = [...toRemove].sort((a,b) => b-a);
   sortedIdx.forEach(i => orders.splice(i, 1));
   return toRemove.size;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CHEQUEO DE CONSISTENCIA (escanea la cartera y reporta problemas)
+// ═══════════════════════════════════════════════════════════════════════════
+function runConsistencyCheck(){
+  const issues = []; // { severity: 'critical'|'warning'|'info', area, msg, fixHint }
+  // 1) qty negativas (vendiste más de lo que tenés)
+  const negTickers = [];
+  const pfGlobal = getPortfolio();
+  // Simulamos sin filtrar qty>0
+  const map = {};
+  const sortedOrds = [...orders].sort((a, b) => {
+    const da = a.date || '', db = b.date || '';
+    if(da !== db) return da.localeCompare(db);
+    if(a.action !== b.action){
+      if(a.action === 'Compra') return -1;
+      if(b.action === 'Compra') return 1;
+    }
+    return (a.id||0) - (b.id||0);
+  });
+  sortedOrds.forEach(o => {
+    if(!map[o.ticker]) map[o.ticker] = 0;
+    map[o.ticker] += (o.action === 'Compra' ? o.qty : -o.qty);
+  });
+  Object.entries(map).forEach(([t, q]) => {
+    if(q < -0.0001 && !isCash(t)){
+      issues.push({
+        severity: 'critical',
+        area: 'Cantidad',
+        msg: `${t}: cantidad final negativa (${q.toFixed(4)}). Vendiste más de lo que tenías.`,
+        fixHint: 'Revisá las ventas de ese ticker. Probablemente sobra una venta o falta una compra.',
+      });
+    }
+    if(q < -0.0001 && isCash(t)){
+      // cash negativo es preocupante pero esperado si no registraste depósitos
+      issues.push({
+        severity: 'warning',
+        area: 'Liquidez',
+        msg: `${t}: balance negativo (${q.toFixed(2)}). Faltan depósitos registrados o sobran retiros.`,
+        fixHint: 'Registrá tus depósitos como Compra de USD/ARS vía "💰 Liquidez" o reducí gastos.',
+      });
+    }
+  });
+  // 2) auto-órdenes huérfanas (auto:true pero su auto_parent_id no existe en orders)
+  const orderIds = new Set(orders.map(o => String(o.id)));
+  const orphanAutos = orders.filter(o => o.auto && o.auto_parent_id && !orderIds.has(String(o.auto_parent_id)));
+  if(orphanAutos.length > 0){
+    issues.push({
+      severity: 'warning',
+      area: 'Auto-órdenes',
+      msg: `${orphanAutos.length} contra-asiento(s) auto huérfanos (su orden padre fue borrada).`,
+      fixHint: 'Apretá "🔧 Rebalancear liquidez" en los brokers afectados.',
+      details: [...new Set(orphanAutos.map(o => o.broker).filter(Boolean))],
+    });
+  }
+  // 3) órdenes con campos faltantes
+  const incomplete = orders.filter(o => !o.ticker || !o.date || (!o.broker && !o.dividend && !o.expense));
+  if(incomplete.length > 0){
+    issues.push({
+      severity: 'warning',
+      area: 'Datos',
+      msg: `${incomplete.length} orden(es) con campos vacíos (sin ticker, fecha o broker).`,
+      fixHint: 'Andá a Órdenes, filtrá y editá las que están incompletas.',
+    });
+  }
+  // 4) duplicados por id idéntico
+  const seen = new Set();
+  let dups = 0;
+  orders.forEach(o => {
+    const k = String(o.id);
+    if(seen.has(k)) dups++; else seen.add(k);
+  });
+  if(dups > 0){
+    issues.push({
+      severity: 'critical',
+      area: 'Duplicados',
+      msg: `${dups} orden(es) con id repetido (bug de versiones previas).`,
+      fixHint: 'En la pestaña Órdenes apretá "🧹 Duplicados".',
+    });
+  }
+  // 5) compras de activos sin contra-asiento de liquidez en brokers ARS/USD definidos
+  // (sólo cuenta para órdenes recientes, después del cutoff de tracking)
+  const ordersNeedingAuto = orders.filter(o =>
+    !o.auto && !o.dividend && !o.expense &&
+    o.action === 'Compra' && !isCash(o.ticker) &&
+    o.broker && o.date
+  );
+  let missingContraCount = 0;
+  ordersNeedingAuto.forEach(o => {
+    const hasAuto = orders.some(x => x.auto && String(x.auto_parent_id||'') === String(o.id));
+    if(!hasAuto){
+      // Buscar match por heurística (broker + fecha + ticker mencionado)
+      const hasLegacyMatch = orders.some(x =>
+        x.auto && (x.broker||'').toLowerCase() === (o.broker||'').toLowerCase() &&
+        x.date === o.date && (x.notes||'').includes(o.ticker)
+      );
+      if(!hasLegacyMatch) missingContraCount++;
+    }
+  });
+  if(missingContraCount > 5){ // tolerancia: pocas faltas pueden ser intencionales
+    issues.push({
+      severity: 'info',
+      area: 'Liquidez',
+      msg: `${missingContraCount} compra(s) sin contra-asiento de liquidez detectado.`,
+      fixHint: 'Esto es OK si no registrás depósitos. Si querés precisión, rebalanceá liquidez por broker.',
+    });
+  }
+  // 6) Activos sin precio (puede ser temporal o un ticker mal escrito)
+  const noPriceTickers = pfGlobal.filter(a => !isCash(a.ticker) && a.qty > 0 && (!prices[a.ticker] || prices[a.ticker] <= 0));
+  if(noPriceTickers.length > 0){
+    issues.push({
+      severity: 'info',
+      area: 'Precios',
+      msg: `${noPriceTickers.length} activo(s) sin precio actualizado: ${noPriceTickers.slice(0,5).map(a=>a.ticker).join(', ')}${noPriceTickers.length>5?'...':''}`,
+      fixHint: 'Apretá "↻ Actualizar" o verificá que el ticker esté bien escrito.',
+    });
+  }
+  return issues;
+}
+
+function showConsistencyReport(){
+  setStatus('Analizando cartera...', true);
+  setTimeout(() => {
+    const issues = runConsistencyCheck();
+    setStatus('', false);
+    if(!issues.length){
+      alert('✅ Tu cartera está consistente.\n\nNo detecté problemas en las órdenes, liquidez, duplicados ni precios.');
+      return;
+    }
+    const byseverity = {
+      critical: issues.filter(i => i.severity === 'critical'),
+      warning:  issues.filter(i => i.severity === 'warning'),
+      info:     issues.filter(i => i.severity === 'info'),
+    };
+    let msg = '🔍 Chequeo de consistencia\n\n';
+    if(byseverity.critical.length){
+      msg += `🔴 ${byseverity.critical.length} problema(s) crítico(s):\n`;
+      byseverity.critical.forEach(i => { msg += `   • [${i.area}] ${i.msg}\n     → ${i.fixHint}\n`; });
+      msg += '\n';
+    }
+    if(byseverity.warning.length){
+      msg += `🟡 ${byseverity.warning.length} advertencia(s):\n`;
+      byseverity.warning.forEach(i => { msg += `   • [${i.area}] ${i.msg}\n     → ${i.fixHint}\n`; });
+      msg += '\n';
+    }
+    if(byseverity.info.length){
+      msg += `🔵 ${byseverity.info.length} aviso(s):\n`;
+      byseverity.info.forEach(i => { msg += `   • [${i.area}] ${i.msg}\n     → ${i.fixHint}\n`; });
+    }
+    alert(msg);
+  }, 100);
 }
 
 // Recalcula las auto-órdenes de liquidez de UN broker desde cero.
