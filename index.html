@@ -2592,14 +2592,38 @@ function render(){
   renderDividends();
   renderMainCharts(pf, totGlobal, totARS_usd, totUSD_usd, c);
   renderSidebarPie(pfInv, 'Portfolio', totGlobal);
-  // Liquidity summary
-  const liqARS = pfCash.filter(a=>a.ticker.toUpperCase()==='ARS').reduce((s,a)=>s+a.qty,0);
-  const liqUSD = pfCash.filter(a=>a.ticker.toUpperCase()!=='ARS').reduce((s,a)=>s+a.qty*(prices[a.ticker]||1),0);
+  // Liquidity summary — calcular directamente de orders para incluir balances
+  // negativos y casos edge. getPortfolio filtra por qty>0 lo que ocultaría
+  // déficits o cash que fue 100% consumido por auto-Ventas.
+  const ARS_TICKERS = ['ARS','PESOS'];
+  const USD_TICKERS = ['USD','USDT','USDC','DAI','BUSD','CASH'];
+  let liqARS = 0, liqUSD = 0;
+  orders.forEach(o => {
+    if(!isCash(o.ticker)) return;
+    const t = (o.ticker||'').toUpperCase();
+    const sign = o.action === 'Compra' ? 1 : -1;
+    if(ARS_TICKERS.includes(t)){
+      liqARS += (o.qty||0) * sign;
+    } else if(USD_TICKERS.includes(t)){
+      liqUSD += (o.qty||0) * sign * (prices[o.ticker] || 1);
+    }
+  });
   const liqBox = document.getElementById('liquidezSummaryBox');
   if(liqBox){
-    liqBox.style.display=(liqARS>0||liqUSD>0)?'block':'none';
-    document.getElementById('liqTotalARS').textContent=liqARS>0?$a(liqARS):'$0';
-    document.getElementById('liqTotalUSD').textContent=liqUSD>0?$u(liqUSD):'$0';
+    // Mostrar el panel si hay CUALQUIER actividad de cash (positiva o negativa).
+    const hasAnyCash = orders.some(o => isCash(o.ticker));
+    liqBox.style.display = hasAnyCash ? 'block' : 'none';
+    const arsEl = document.getElementById('liqTotalARS');
+    const usdEl = document.getElementById('liqTotalUSD');
+    // Mostrar valores incluso si son 0 o negativos (más informativo que esconder)
+    if(arsEl){
+      arsEl.textContent = liqARS === 0 ? '$0' : $a(liqARS);
+      arsEl.style.color = liqARS < 0 ? 'var(--red)' : 'var(--gold)';
+    }
+    if(usdEl){
+      usdEl.textContent = liqUSD === 0 ? '$0' : $u(liqUSD);
+      usdEl.style.color = liqUSD < 0 ? 'var(--red)' : 'var(--green)';
+    }
   }
 }
 function renderCash(pf, broker){
