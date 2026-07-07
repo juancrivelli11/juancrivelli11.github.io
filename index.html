@@ -4913,7 +4913,7 @@ function saveOrder(){
   //    porque si no se duplica la operación y deja saldo neto en 0.
   //  - cuando el mercado elegido es "Liquidez" (registrás cash directamente).
   if(!isGasto && broker && !isCash(ticker) && mktVal !== 'liquidez'){
-    const totalUSD = qty * priceUSD + commUSD;
+    const totalUSD = qty * priceUSD + (isCompra ? commUSD : -commUSD);
     const totalARS = totalUSD * (c || 1);
     const brokerCur = getBrokerCurrency(broker);
     // Buscar liquidez del tipo del broker
@@ -4929,15 +4929,15 @@ function saveOrder(){
     // Si es una VENTA y no hay liquidez existente, usar el ticker default del broker.
     // La venta GENERA cash, así que crea la primera entrada de liquidez si no hay.
     // (Para compras sin liquidez no auto-creamos: el usuario debería registrar el depósito.)
-    if(!liqTicker && !isCompra){
-      liqTicker = stableTickers[0]; // ARS para brokers ARS, USD para USD
+    if(!liqTicker){
+      liqTicker = stableTickers[0]; // default del broker; puede quedar negativo si falta registrar el depósito
     }
     if(liqTicker){
       const isLiqARS = liqTicker === 'ARS' || liqTicker === 'PESOS';
       const adjQty   = isLiqARS ? totalARS : totalUSD;
       const adjPrice = isLiqARS ? (c > 0 ? 1/c : 0) : 1;
       orders.push({
-        id:Date.now()+2,
+        id:Date.now() + Math.floor(Math.random()*1000) + 1,
         ticker:liqTicker,
         type:isLiqARS ? 'Acción Argentina' : (liqTicker==='USD' ? 'Acción USA' : 'Cripto'),
         action:isCompra?'Venta':'Compra',
@@ -5058,10 +5058,12 @@ function saveEditOrder(){
   // Sumar también heurísticas legacy (mismo broker viejo, misma fecha vieja, notas mencionan ticker)
   const legacyChildren = orders.filter(x => {
     if(!x.auto) return false;
+    if(x.auto_parent_id) return false; // linkeada a otra orden: no tocar
     if(linkedChildren.includes(x)) return false;
     const sameBroker = (x.broker||'').toLowerCase() === (o.broker||'').toLowerCase();
     const sameDate   = (x.date||'') === (o.date||'');
-    const notesMatch = (x.notes||'').includes(o.ticker);
+    const esc = String(o.ticker).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const notesMatch = new RegExp('^Auto: (compra|venta) de ' + esc + '( |$)').test(x.notes||'');
     return sameBroker && sameDate && notesMatch;
   });
   const allChildren = [...linkedChildren, ...legacyChildren];
@@ -5070,10 +5072,10 @@ function saveEditOrder(){
     const childIds = new Set(allChildren.map(x => String(x.id)));
     orders = orders.filter(x => !childIds.has(String(x.id)));
     // Recalcular contra-asiento como hace saveOrder
-    const c = ccl();
+    const c = orders[idx].cclAtOrder || ccl();
     const isCompra = orders[idx].action === 'Compra';
     const isA = isARS(orders[idx].type);
-    const totalUSD = qty * priceUSD + commUSD;
+    const totalUSD = qty * priceUSD + (isCompra ? commUSD : -commUSD);
     const totalARS = totalUSD * (c || 1);
     const brokerCur = getBrokerCurrency(newBroker);
     const stableTickers = brokerCur === 'ARS' ? ['ARS','PESOS'] : ['USD','USDT','USDC'];
@@ -5083,7 +5085,7 @@ function saveEditOrder(){
       const stQty = stOrds.reduce((s,x) => s + (x.action==='Compra'?x.qty:-x.qty), 0);
       if(stQty > 0){ liqTicker = st; break; }
     }
-    if(!liqTicker && !isCompra) liqTicker = stableTickers[0];
+    if(!liqTicker) liqTicker = stableTickers[0];
     if(newBroker && liqTicker){
       const isLiqARS = liqTicker === 'ARS' || liqTicker === 'PESOS';
       const adjQty   = isLiqARS ? totalARS : totalUSD;
@@ -5138,10 +5140,11 @@ function delOrder(id){
     if(i === targetIdx) return; // no el target mismo
     if(!o.auto) return;
     if(String(o.auto_parent_id || '') === sid){ autoChildrenIdx.push(i); return; }
-    if(target && !target.auto){
+    if(target && !target.auto && !o.auto_parent_id){
       const sameBroker = (o.broker||'').toLowerCase() === (target.broker||'').toLowerCase();
       const sameDate   = (o.date||'') === (target.date||'');
-      const notesMatch = (o.notes||'').includes(target.ticker);
+      const esc = String(target.ticker).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const notesMatch = new RegExp('^Auto: (compra|venta) de ' + esc + '( |$)').test(o.notes||'');
       if(sameBroker && sameDate && notesMatch) autoChildrenIdx.push(i);
     }
   });
@@ -5377,15 +5380,14 @@ function rebuildLiquidityForBroker(brokerName){
     // Calcular el monto del contra-asiento
     const isCompra = o.action === 'Compra';
     const c = o.cclAtOrder || ccl();
-    const totalUSD = (o.qty || 0) * (o.price || 0) + (o.comm || 0);
+    const totalUSD = (o.qty || 0) * (o.price || 0) + (isCompra ? (o.comm || 0) : -(o.comm || 0));
     const totalARS = totalUSD * (c || 1);
     // Elegir ticker de liquidez: el que tenga balance > 0, o el default del broker
     let liqTicker = null;
     for(const st of stableTickers){
       if((balances[st] || 0) > 0){ liqTicker = st; break; }
     }
-    if(!liqTicker && !isCompra) liqTicker = stableTickers[0]; // Ventas crean cash si no había
-    if(!liqTicker) return; // Compras sin liquidez: no auto-generamos (el user debe registrar el depósito)
+    if(!liqTicker) liqTicker = stableTickers[0]; // default del broker; puede quedar negativo si falta registrar el depósito
     const isLiqARS = liqTicker === 'ARS' || liqTicker === 'PESOS';
     const adjQty = isLiqARS ? totalARS : totalUSD;
     const adjPrice = isLiqARS ? (c > 0 ? 1/c : 0) : 1;
