@@ -2053,6 +2053,13 @@ function getPortfolio(broker=null){
     // mostrar PPC histórico en ARS para activos argentinos sin distorsionarse por CCL.
     const pOrig = (typeof o.priceOrig === 'number' && o.priceOrig > 0) ? o.priceOrig : (o.price||0);
     if(o.action==='Compra'){
+      // Posición cerrada que se reabre: adoptar el tipo de la orden nueva y
+      // limpiar residuos de costo. Clave para el caso "vendí la acción USA y
+      // después compré el CEDEAR del mismo ticker".
+      if(m.qty <= 0.0001 && (o.type||'') && o.type !== m.type){
+        m.type = o.type;
+        m.qty = 0; m.cost = 0; m.costOrig = 0;
+      }
       m.qty   += o.qty;
       m.cost  += o.qty*o.price + (o.comm||0);
       m.costOrig += o.qty*pOrig;
@@ -5237,6 +5244,30 @@ function deduplicateOrders(){
 // ═══════════════════════════════════════════════════════════════════════════
 function runConsistencyCheck(){
   const issues = []; // { severity: 'critical'|'warning'|'info', area, msg, fixHint }
+  // 0) Mismo ticker activo como activo ARS (CEDEAR/acción arg) y como activo USD a la vez.
+  // La valuación usa UN precio por ticker, así que mezclar ambos infla o pisa números.
+  try{
+    const classByTickerBroker = {};
+    brokers.forEach(b => {
+      const bName = typeof b === 'string' ? b : (b?.name || '');
+      if(!bName) return;
+      getPortfolio(bName).forEach(a => {
+        if(isCash(a.ticker) || a.qty <= 0.0001) return;
+        if(!classByTickerBroker[a.ticker]) classByTickerBroker[a.ticker] = new Set();
+        classByTickerBroker[a.ticker].add(isARS(a.type) ? 'ARS' : 'USD');
+      });
+    });
+    Object.entries(classByTickerBroker).forEach(([t, classes]) => {
+      if(classes.size > 1){
+        issues.push({
+          severity: 'warning',
+          area: 'Ticker mixto',
+          msg: `${t}: lo tenés activo como CEDEAR/activo en pesos Y como activo en dólares al mismo tiempo. La app usa un solo precio por ticker, así que una de las dos valuaciones va a salir mal.`,
+          fixHint: 'Registralos con tickers distintos (ej: ' + t + ' para el CEDEAR y ' + t + '.US para la acción USA), o cerrá una de las dos posiciones.'
+        });
+      }
+    });
+  }catch(e){ console.warn('check ticker mixto falló', e); }
   // 1) qty negativas (vendiste más de lo que tenés)
   const negTickers = [];
   const pfGlobal = getPortfolio();
