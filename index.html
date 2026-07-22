@@ -1195,7 +1195,33 @@ const TICKERS = {
 // Cada portfolio es un "escritorio" independiente con sus propias órdenes,
 // brokers, watchlist, snapshots y preferencias. Los datos se guardan en
 // localStorage con prefijo pf6_p_{portfolioId}_{key}.
-let portfolios = JSON.parse(localStorage.getItem('pf6_portfolios') || 'null');
+// ═══ BLINDAJE: lectura segura de datos guardados ═══
+// Si un dato guardado está corrupto, NO mata la app: lo respalda y usa el default.
+function safeParse(key, fallback){
+  try{
+    const raw = localStorage.getItem(key);
+    if(raw === null || raw === undefined || raw === '') return fallback;
+    const v = JSON.parse(raw);
+    return (v === null && fallback !== null) ? fallback : v;
+  }catch(e){
+    console.error('Dato guardado corrupto en', key, e);
+    try{ localStorage.setItem(key + '_corrupt_' + Date.now(), localStorage.getItem(key)); }catch(_){ }
+    return fallback;
+  }
+}
+// Si un error de JS rompe la app, mostramos un aviso claro en vez de una página muerta.
+let _fatalShown = false;
+window.addEventListener('error', function(ev){
+  if(_fatalShown) return;
+  _fatalShown = true;
+  try{
+    const d = document.createElement('div');
+    d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#c62828;color:#fff;padding:10px 16px;font:13px sans-serif;display:flex;gap:12px;align-items:center;justify-content:center';
+    d.innerHTML = '⚠️ Ocurrió un error inesperado. Tus datos están guardados. Probá recargar la página (Ctrl+F5). <button onclick="try{exportData()}catch(e){alert(\'No se pudo exportar\')}" style="background:#fff;color:#c62828;border:none;border-radius:4px;padding:4px 10px;cursor:pointer;font-weight:600">Descargar respaldo</button> <button onclick="this.parentElement.remove()" style="background:none;border:1px solid #fff;color:#fff;border-radius:4px;padding:4px 10px;cursor:pointer">Cerrar</button>';
+    (document.body || document.documentElement).appendChild(d);
+  }catch(_){ }
+});
+let portfolios = safeParse('pf6_portfolios', null);
 let currentPortfolioId = localStorage.getItem('pf6_currentPortfolio') || null;
 
 // MIGRACIÓN: si no hay portfolios todavía, mover los datos existentes a un
@@ -1233,12 +1259,13 @@ function pfKey(suffix){
 // ═══════════════════════════════════════════════════════════════════════════
 // STATE (cargado para el portfolio activo)
 // ═══════════════════════════════════════════════════════════════════════════
-let orders    = JSON.parse(localStorage.getItem(pfKey('orders'))  || '[]');
-let snapshots = JSON.parse(localStorage.getItem(pfKey('snaps'))   || '[]');
-let brokers   = JSON.parse(localStorage.getItem(pfKey('brokers')) || JSON.stringify(DEFAULT_BROKERS));
+let orders    = safeParse(pfKey('orders'), []);
+if(!Array.isArray(orders)) orders = [];
+let snapshots = safeParse(pfKey('snaps'), []);
+let brokers   = safeParse(pfKey('brokers'), JSON.parse(JSON.stringify(DEFAULT_BROKERS)));
 // Preferencia de moneda por broker: { "Binance": "USD", "IOL Crypto": "ARS", ... }
-let brokerCurrencyPrefs = JSON.parse(localStorage.getItem(pfKey('broker_currency')) || '{}');
-let prices    = JSON.parse(localStorage.getItem('pf6_prices')||'{}');
+let brokerCurrencyPrefs = safeParse(pfKey('broker_currency'), {});
+let prices    = safeParse('pf6_prices', {});
 // Migración: cuando cambiamos cómo cotizamos CEDEARs (de Yahoo .BA en pesos a
 // underlying US en dólares), los precios cacheados quedan mal interpretados.
 // Esta limpieza one-time elimina los precios de CEDEARs para forzar re-fetch
@@ -1289,11 +1316,12 @@ function getCurrentPortfolio(){
 }
 function reloadStateFromCurrentPortfolio(){
   // Recarga las variables globales desde el portfolio activo
-  orders    = JSON.parse(localStorage.getItem(pfKey('orders'))  || '[]');
-  snapshots = JSON.parse(localStorage.getItem(pfKey('snaps'))   || '[]');
-  brokers   = JSON.parse(localStorage.getItem(pfKey('brokers')) || JSON.stringify(DEFAULT_BROKERS));
-  brokerCurrencyPrefs = JSON.parse(localStorage.getItem(pfKey('broker_currency')) || '{}');
-  watchlist = JSON.parse(localStorage.getItem(pfKey('watchlist')) || '[]');
+  orders    = safeParse(pfKey('orders'), []);
+  if(!Array.isArray(orders)) orders = [];
+  snapshots = safeParse(pfKey('snaps'), []);
+  brokers   = safeParse(pfKey('brokers'), JSON.parse(JSON.stringify(DEFAULT_BROKERS)));
+  brokerCurrencyPrefs = safeParse(pfKey('broker_currency'), {});
+  watchlist = safeParse(pfKey('watchlist'), []);
   const p = getCurrentPortfolio();
   if(p) document.getElementById('pfName').textContent = p.name;
 }
@@ -1754,7 +1782,7 @@ async function supaSync(){
     portfolios.forEach(p => {
       const pOrders = (p.id === currentPortfolioId)
         ? orders // usar las en memoria (más actualizadas)
-        : JSON.parse(localStorage.getItem(`pf6_p_${p.id}_orders`) || '[]');
+        : safeParse(`pf6_p_${p.id}_orders`, []);
       pOrders.forEach(o => allOrders.push({ ...o, portfolio_id: p.id }));
     });
     await supa.from('orders').delete().eq('user_id', currentUser.id);
@@ -1773,13 +1801,13 @@ async function supaSync(){
       portfolioMeta[p.id] = {
         brokers: (p.id === currentPortfolioId)
           ? brokers
-          : JSON.parse(localStorage.getItem(`pf6_p_${p.id}_brokers`) || JSON.stringify(DEFAULT_BROKERS)),
+          : safeParse(`pf6_p_${p.id}_brokers`, JSON.parse(JSON.stringify(DEFAULT_BROKERS))),
         watchlist: (p.id === currentPortfolioId)
           ? watchlist
-          : JSON.parse(localStorage.getItem(`pf6_p_${p.id}_watchlist`) || '[]'),
+          : safeParse(`pf6_p_${p.id}_watchlist`, []),
         broker_currency: (p.id === currentPortfolioId)
           ? brokerCurrencyPrefs
-          : JSON.parse(localStorage.getItem(`pf6_p_${p.id}_broker_currency`) || '{}'),
+          : safeParse(`pf6_p_${p.id}_broker_currency`, {}),
       };
     });
     const multiPayload = { _multi: true, portfolios, currentPortfolioId, portfolioMeta };
@@ -1936,7 +1964,7 @@ function isCash(ticker){ return CASH_LIST.includes((ticker||'').toUpperCase()); 
 // FILTROS POR TIPO DE ACTIVO (chips arriba de la tabla de activos)
 // ═══════════════════════════════════════════════════════════════════════════
 // Set de categorías ocultas. Persiste en localStorage.
-let hiddenAssetTypes = new Set(JSON.parse(localStorage.getItem('pf6_hiddenTypes') || '[]'));
+let hiddenAssetTypes = new Set(safeParse('pf6_hiddenTypes', []));
 
 // Mapea un type interno a la categoría visible del chip.
 function typeToCategory(type){
@@ -2056,27 +2084,46 @@ function computeIRR(cashFlows, guess = 0.1){
   if(!hasNeg || !hasPos) return null;
   const t0 = cashFlows[0].date.getTime();
   const days = cashFlows.map(cf => (cf.date.getTime() - t0) / (1000*60*60*24));
+  const npvAt = (rate) => {
+    let npv = 0;
+    for(let i = 0; i < cashFlows.length; i++){
+      npv += cashFlows[i].amount / Math.pow(1 + rate, days[i] / 365);
+    }
+    return npv;
+  };
   let rate = guess;
   const MAX_ITER = 100;
   const TOL = 1e-7;
+  let newtonFailed = false;
   for(let iter = 0; iter < MAX_ITER; iter++){
     let npv = 0, dnpv = 0;
+    const base = 1 + rate;
+    if(base <= 0){ newtonFailed = true; break; }
     for(let i = 0; i < cashFlows.length; i++){
       const t = days[i] / 365;
-      const base = 1 + rate;
-      if(base <= 0) return null;
       const factor = Math.pow(base, t);
       npv += cashFlows[i].amount / factor;
       dnpv -= t * cashFlows[i].amount / (factor * base);
     }
     if(Math.abs(npv) < TOL) return rate;
-    if(Math.abs(dnpv) < 1e-12) return null; // derivada cero
+    if(Math.abs(dnpv) < 1e-12){ newtonFailed = true; break; }
     const newRate = rate - npv / dnpv;
-    if(newRate <= -0.999) return null; // rate inválido
+    if(newRate <= -0.999){ newtonFailed = true; break; }
     if(Math.abs(newRate - rate) < TOL) return newRate;
     rate = newRate;
+    if(iter === MAX_ITER - 1) newtonFailed = true;
   }
-  return null; // no convergió
+  // Fallback: bisección en [-0.95, 10] si hay cambio de signo
+  let lo = -0.95, hi = 10;
+  let fLo = npvAt(lo), fHi = npvAt(hi);
+  if(fLo * fHi > 0) return null; // sin raíz en el rango
+  for(let iter = 0; iter < 200; iter++){
+    const mid = (lo + hi) / 2;
+    const fMid = npvAt(mid);
+    if(Math.abs(fMid) < TOL || (hi - lo) < 1e-9) return mid;
+    if(fLo * fMid < 0){ hi = mid; fHi = fMid; } else { lo = mid; fLo = fMid; }
+  }
+  return (lo + hi) / 2;
 }
 
 // Calcula TIR anualizada y días de tenencia para un activo enrichado.
@@ -2096,13 +2143,20 @@ function calcAssetIRR(asset, currentCCL){
       // ARS: usar priceOrig (pesos al momento de la compra) + comm convertida al CCL del momento
       const pOrig = (typeof o.priceOrig === 'number' && o.priceOrig > 0) ? o.priceOrig : (o.price * (o.cclAtOrder || currentCCL));
       const commARS = (o.comm || 0) * (o.cclAtOrder || currentCCL);
-      amt = o.qty * pOrig + commARS;
+      amt = o.qty * pOrig + (o.action === 'Compra' ? commARS : -commARS);
     } else {
       // USD: usar price (USD) directamente
-      amt = o.qty * o.price + (o.comm || 0);
+      amt = o.qty * o.price + (o.action === 'Compra' ? (o.comm || 0) : -(o.comm || 0));
     }
     cashFlows.push({ date, amount: o.action === 'Compra' ? -amt : amt });
   }
+  // Dividendos cobrados de este activo: inflows reales de la inversión
+  orders.filter(o => o.dividend && (o.dividendTicker||'') === ticker && o.date).forEach(o => {
+    const netUSD = (typeof o.dividendNetUSD === 'number') ? o.dividendNetUSD
+                 : (o.currency === 'ARS' ? (o.qty||0) / (o.cclAtOrder || currentCCL) : (o.qty||0));
+    const amt = isAsArs ? netUSD * (o.cclAtOrder || currentCCL) : netUSD;
+    if(amt > 0) cashFlows.push({ date: new Date(o.date), amount: amt });
+  });
   // Valor actual de la tenencia como inflow final
   const currentValue = isAsArs
     ? (asset.hasPx ? asset.value * currentCCL : (asset.costOrig || 0))
@@ -2110,6 +2164,7 @@ function calcAssetIRR(asset, currentCCL){
   if(currentValue > 0){
     cashFlows.push({ date: new Date(), amount: currentValue });
   }
+  cashFlows.sort((a,b) => a.date - b.date);
   const firstDate = cashFlows[0].date;
   const daysHeld = Math.max(1, Math.round((Date.now() - firstDate.getTime()) / (1000*60*60*24)));
   // Si llevás muy poco tiempo (< 7 días), TIR anualizada no es significativa
@@ -2851,8 +2906,8 @@ function refreshFilterBrokerDropdown(){
 // ═══════════════════════════════════════════════════════════════════════════
 // WATCHLIST (Seguimiento)
 // ═══════════════════════════════════════════════════════════════════════════
-let watchlist = JSON.parse(localStorage.getItem(pfKey('watchlist')) || '[]');
-let _watchPrices = JSON.parse(localStorage.getItem('pf6_watchPrices') || '{}'); // {ticker: {price, ts, returns}}
+let watchlist = safeParse(pfKey('watchlist'), []);
+let _watchPrices = safeParse('pf6_watchPrices', {}); // {ticker: {price, ts, returns}}
 
 function saveWatchlist(){
   localStorage.setItem(pfKey('watchlist'), JSON.stringify(watchlist));
@@ -5534,11 +5589,11 @@ function exportData(){
   const portfolioData = {};
   let totalOrders = 0;
   portfolios.forEach(p => {
-    const pOrders = JSON.parse(localStorage.getItem(`pf6_p_${p.id}_orders`) || '[]');
-    const pSnaps  = JSON.parse(localStorage.getItem(`pf6_p_${p.id}_snaps`)  || '[]');
-    const pBrokers = JSON.parse(localStorage.getItem(`pf6_p_${p.id}_brokers`) || JSON.stringify(DEFAULT_BROKERS));
-    const pWatch  = JSON.parse(localStorage.getItem(`pf6_p_${p.id}_watchlist`) || '[]');
-    const pBC     = JSON.parse(localStorage.getItem(`pf6_p_${p.id}_broker_currency`) || '{}');
+    const pOrders = safeParse(`pf6_p_${p.id}_orders`, []);
+    const pSnaps  = safeParse(`pf6_p_${p.id}_snaps`, []);
+    const pBrokers = safeParse(`pf6_p_${p.id}_brokers`, JSON.parse(JSON.stringify(DEFAULT_BROKERS)));
+    const pWatch  = safeParse(`pf6_p_${p.id}_watchlist`, []);
+    const pBC     = safeParse(`pf6_p_${p.id}_broker_currency`, {});
     portfolioData[p.id] = {
       orders: pOrders, snapshots: pSnaps,
       brokers: pBrokers, watchlist: pWatch,
