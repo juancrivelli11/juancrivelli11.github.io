@@ -2329,8 +2329,12 @@ function enrich(pf){
   const c=ccl();
   return pf.map(a=>{
     const isPxARS = prices[a.ticker+'_ars']===true;
-    const rawPx   = prices[a.ticker]||0;
-    const rawPrev = prices[a.ticker+'_prev']||0;
+    // Coherencia precio↔tipo: si el precio cacheado no corresponde a la clase
+    // del activo (ej: quedó el precio de la acción USA pero ahora es CEDEAR),
+    // se descarta — mejor sin precio que con un valor inflado por el ratio.
+    const pxMismatch = !isCash(a.ticker) && a.type !== 'Cripto' && (isARS(a.type) !== isPxARS);
+    const rawPx   = pxMismatch ? 0 : (prices[a.ticker]||0);
+    const rawPrev = pxMismatch ? 0 : (prices[a.ticker+'_prev']||0);
     const price   = rawPx>0?(isPxARS?rawPx/c:rawPx):0;
     const prev    = rawPrev>0?(isPxARS?rawPrev/c:rawPrev):0;
     const priceARS= isPxARS?rawPx:price*c;
@@ -2593,6 +2597,7 @@ async function doRefresh(force=false){
   const c=ccl();
   const total=getPortfolio().reduce((s,a)=>{
     const isPxARS=prices[a.ticker+'_ars']===true;
+    if(!isCash(a.ticker) && a.type!=='Cripto' && (isARS(a.type)!==isPxARS)) return s; // precio incoherente con el tipo: no sumar
     const px=prices[a.ticker]||0;
     return s+a.qty*(isPxARS?px/c:px);
   },0);
