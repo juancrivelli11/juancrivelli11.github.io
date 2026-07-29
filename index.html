@@ -4966,6 +4966,14 @@ function saveOrder(){
   const isCompra = actVal === 'Compra';
   const userNotes = el('oNotes').value || '';
   const finalNotes = isGasto ? (userNotes ? `Gasto/Retiro: ${userNotes}` : 'Gasto/Retiro') : userNotes;
+  // Guard anti-ratio: comprar "Acción USA" (precio en USD) en un broker en pesos
+  // casi siempre es un error — ahí se compran CEDEARs con precio en ARS.
+  if(isCompra && !isGasto && mktVal === 'usa' && broker && getBrokerCurrency(broker) === 'ARS'){
+    if(!confirm(`⚠️ Elegiste mercado "Acción USA" (precio en DÓLARES por acción) pero "${broker}" es un broker en PESOS.\n\nSi compraste un CEDEAR pagando en pesos, apretá Cancelar y elegí mercado "CEDEAR" (el precio va en pesos por CEDEAR).\n\n¿Confirmás que esta orden es realmente en dólares?`)){
+      releaseLock();
+      return;
+    }
+  }
   const parentOrderId = Date.now();
   orders.push({
     id:parentOrderId,ticker,type,
