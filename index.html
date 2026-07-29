@@ -2723,7 +2723,7 @@ function renderCash(pf, broker){
   cashSection.style.display='block';
   const c=ccl();
   cashCards.innerHTML = cashAssets.map(a=>{
-    const isArsT = a.ticker.toUpperCase()==='ARS';
+    const isArsT = a.ticker.toUpperCase()==='ARS' || a.ticker.toUpperCase()==='PESOS';
     const valueUSD = isArsT ? a.qty/c : a.qty*( prices[a.ticker]||1 );
     const valueARS = isArsT ? a.qty : valueUSD*c;
     return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;flex:1;min-width:130px;box-shadow:0 1px 3px #1565c008">
@@ -3781,18 +3781,24 @@ function renderBrokerCash(brokerName){
     if(!cashMap[t]) cashMap[t]={ticker:t,qty:0};
     cashMap[t].qty += o.action==='Compra' ? o.qty : -o.qty;
   });
-  const cashList = Object.values(cashMap).filter(a=>a.qty>0.001);
+  // Mostrar TODA moneda con actividad, incluso saldo 0 o negativo (en rojo).
+  // Antes se filtraba qty>0 y el usuario no veía sus pesos "consumidos".
+  const cashList = Object.values(cashMap);
   if(!cashList.length){ liqDiv.style.display='none'; return; }
   liqDiv.style.display='block';
   const c=ccl();
   liqCards.innerHTML = cashList.map(a=>{
-    const isArsT = a.ticker==='ARS';
+    const isArsT = a.ticker==='ARS' || a.ticker==='PESOS';
     const valueUSD = isArsT ? a.qty/c : a.qty*(prices[a.ticker]||1);
     const valueARS = isArsT ? a.qty : valueUSD*c;
+    const neg = a.qty < -0.001;
+    const mainColor = neg ? 'var(--red)' : 'var(--blue)';
+    const hint = neg ? `<div style="font-size:10px;color:var(--red);margin-top:3px">Las compras superan los depósitos registrados en este broker</div>` : '';
     return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;flex:1;min-width:130px">
       <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">${a.ticker}</div>
-      <div style="font-size:18px;font-weight:800;color:var(--blue);font-family:monospace">${isArsT?$a(a.qty):$u(a.qty)}</div>
+      <div style="font-size:18px;font-weight:800;color:${mainColor};font-family:monospace">${isArsT?$a(a.qty):$u(a.qty)}</div>
       <div style="font-size:11px;color:var(--muted);margin-top:2px">${isArsT?'≈ '+$u(valueUSD):'≈ '+$a(valueARS)+' ARS'}</div>
+      ${hint}
     </div>`;
   }).join('');
 }
