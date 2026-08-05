@@ -4783,7 +4783,9 @@ function renderPieModal(){
   el('pieBigEmpty').style.display = 'none';
 
   // Pintar tabla
-  const fmtVal = v => (cur === 'ARS') ? `$${n2(v * c, 0)}` : `$${n2(v, 2)}`;
+  // Moneda SIEMPRE explícita (US$ / AR$) — sin el prefijo, un CEDEAR valuado
+  // en dólares parece un número sin sentido para quien piensa en pesos.
+  const fmtVal = v => (cur === 'ARS') ? `AR$ ${n2(v * c, 0)}` : `US$ ${n2(v, 2)}`;
   tbody.innerHTML = rows.map((r, i) => {
     const pct = total > 0 ? (r.valueUSD / total * 100) : 0;
     const col = COLS[i % COLS.length];
