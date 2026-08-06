@@ -420,6 +420,7 @@ body.dark #auth-welcome h2{color:#90caf9}
     <button class="tab" onclick="goTab('charts',this)">Gráficas</button>
     <button class="tab" onclick="goTab('dividends',this)">💰 Dividendos</button>
     <button class="tab" onclick="goTab('watchlist',this)">👁 Seguimiento</button>
+    <button class="tab" onclick="goTab('notes',this)">📝 Notas</button>
   </div>
 </div>
 <!-- BODY -->
@@ -653,6 +654,19 @@ body.dark #auth-welcome h2{color:#90caf9}
             </thead>
             <tbody id="watchlistTbody"></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+    <div class="page" id="page-notes">
+      <div class="sec-hdr">
+        <span class="sec-title">📝 NOTAS</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Tu bloc personal: dejate recordatorios, ideas y pendientes como un chat con vos mismo. Se guardan en este portfolio.</div>
+      <div class="chart-box" style="display:flex;flex-direction:column;height:65vh;max-height:640px">
+        <div id="notesFeed" style="flex:1;overflow-y:auto;padding:8px 4px;display:flex;flex-direction:column;gap:8px"></div>
+        <div style="display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--blueL)">
+          <textarea id="noteInput" rows="2" placeholder="Escribí una nota... (Enter guarda, Shift+Enter salto de línea)" style="flex:1;resize:none;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px" onkeydown="noteKeydown(event)"></textarea>
+          <button class="btn btn-green" style="padding:8px 16px" onclick="addNote()">Guardar</button>
         </div>
       </div>
     </div>
@@ -897,8 +911,9 @@ body.dark #auth-welcome h2{color:#90caf9}
     <div style="flex:1;min-width:140px">
       <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">Moneda visualización</label>
       <select id="pieFilterCurrency" onchange="renderPieModal()" style="width:100%">
-        <option value="USD">USD</option>
-        <option value="ARS">ARS</option>
+        <option value="native">Moneda de cada activo</option>
+        <option value="USD">Todo en USD</option>
+        <option value="ARS">Todo en ARS</option>
       </select>
     </div>
     <div style="flex:1;min-width:140px">
@@ -4733,7 +4748,7 @@ function openPieModal(ctx){
   if(ctx?.group) el('pieFilterGroup').value = ctx.group;
   // Reset otros filtros
   el('pieFilterType').value = '';
-  el('pieFilterCurrency').value = 'USD';
+  el('pieFilterCurrency').value = 'native';
   openOverlay('pie');
   renderPieModal();
 }
@@ -4763,8 +4778,9 @@ function renderPieModal(){
     else if(group === 'broker') key = (a.brkList && a.brkList[0]) || 'Sin broker';
     else if(group === 'currency') key = isARS(a.type) ? 'ARS' : 'USD';
     else key = a.ticker;
-    if(!buckets[key]) buckets[key] = {label:key, valueUSD:0, pnlUSD:0};
+    if(!buckets[key]) buckets[key] = {label:key, valueUSD:0, pnlUSD:0, allARS:true};
     buckets[key].valueUSD += a.value;
+    if(!isARS(a.type)) buckets[key].allARS = false;
     if(a.pnl != null) buckets[key].pnlUSD += a.pnl;
   });
 
@@ -4786,22 +4802,25 @@ function renderPieModal(){
   // Moneda SIEMPRE explícita (US$ / AR$) — sin el prefijo, un CEDEAR valuado
   // en dólares parece un número sin sentido para quien piensa en pesos.
   const fmtVal = v => (cur === 'ARS') ? `AR$ ${n2(v * c, 0)}` : `US$ ${n2(v, 2)}`;
+  // Modo "moneda de cada activo": grupos 100% en pesos se muestran en AR$, el resto en US$.
+  const fmtRow = (r, v) => cur !== 'native' ? fmtVal(v) : (r.allARS ? `AR$ ${n2(v * c, 0)}` : `US$ ${n2(v, 2)}`);
+  const fmtTotal = v => cur !== 'native' ? fmtVal(v) : `US$ ${n2(v, 2)} · ≈ AR$ ${n2(v * c, 0)}`;
   tbody.innerHTML = rows.map((r, i) => {
     const pct = total > 0 ? (r.valueUSD / total * 100) : 0;
     const col = COLS[i % COLS.length];
     const pnlClass = r.pnlUSD >= 0 ? 'up' : 'dn';
-    const pnlStr = (r.pnlUSD >= 0 ? '+' : '') + fmtVal(r.pnlUSD);
+    const pnlStr = (r.pnlUSD >= 0 ? '+' : '') + fmtRow(r, r.pnlUSD);
     return `<tr style="border-bottom:1px solid var(--blueL)">
       <td style="padding:6px 8px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${col};margin-right:6px;vertical-align:middle"></span>${r.label}</td>
       <td style="padding:6px 8px;text-align:right;font-family:monospace">${n2(pct, 2)}%</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:600">${fmtVal(r.valueUSD)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:600">${fmtRow(r, r.valueUSD)}</td>
       <td class="${pnlClass}" style="padding:6px 8px;text-align:right;font-family:monospace">${pnlStr}</td>
     </tr>`;
   }).join('');
 
   // Total footer
   const totalPnl = rows.reduce((s, r) => s + r.pnlUSD, 0);
-  el('pieBigTotal').innerHTML = `<strong>Total:</strong> ${fmtVal(total)} · <span class="${totalPnl >= 0 ? 'up' : 'dn'}">P&L ${totalPnl >= 0 ? '+' : ''}${fmtVal(totalPnl)}</span>`;
+  el('pieBigTotal').innerHTML = `<strong>Total:</strong> ${fmtTotal(total)} · <span class="${totalPnl >= 0 ? 'up' : 'dn'}">P&L ${totalPnl >= 0 ? '+' : ''}${fmtTotal(totalPnl)}</span>`;
 
   // Pintar gráfico
   if(_pieBigChart) _pieBigChart.destroy();
@@ -5742,6 +5761,39 @@ function importData(event){
 // UI HELPERS
 // ═══════════════════════════════════════════════════════════════════════════
 function el(id){return document.getElementById(id);}
+// ═══ NOTAS: bloc personal estilo chat, guardado por portfolio ═══
+function getNotes(){ const n = safeParse(pfKey('notes'), []); return Array.isArray(n) ? n : []; }
+function saveNotes(list){ localStorage.setItem(pfKey('notes'), JSON.stringify(list)); }
+function renderNotes(){
+  const feed = el('notesFeed'); if(!feed) return;
+  const notes = getNotes();
+  if(!notes.length){ feed.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;margin:auto">Sin notas todavía. Escribí la primera acá abajo 👇</div>'; return; }
+  feed.innerHTML = notes.map(n => {
+    const d = new Date(n.ts);
+    const when = d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' ' + d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+    const safeText = String(n.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    return `<div style="align-self:flex-end;max-width:85%;background:var(--blueLL);border:1px solid var(--blueL);border-radius:12px 12px 2px 12px;padding:8px 12px">
+      <div style="font-size:13px;line-height:1.45">${safeText}</div>
+      <div style="font-size:9px;color:var(--muted);margin-top:4px;display:flex;gap:8px;justify-content:flex-end;align-items:center">${when} <span onclick="deleteNote('${n.id}')" style="cursor:pointer;color:var(--red)" title="Borrar nota">🗑</span></div>
+    </div>`;
+  }).join('');
+  feed.scrollTop = feed.scrollHeight;
+}
+function addNote(){
+  const inp = el('noteInput'); const text = (inp.value||'').trim();
+  if(!text) return;
+  const notes = getNotes();
+  notes.push({ id: 'n' + Date.now() + Math.floor(Math.random()*1000), ts: Date.now(), text });
+  saveNotes(notes); inp.value = ''; renderNotes(); inp.focus();
+}
+function deleteNote(id){
+  if(!confirm('¿Borrar esta nota?')) return;
+  saveNotes(getNotes().filter(n => n.id !== id));
+  renderNotes();
+}
+function noteKeydown(ev){
+  if(ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault(); addNote(); }
+}
 function goTab(name,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -5751,6 +5803,7 @@ function goTab(name,btn){
   if(name==='brokers') hideBrokerDetail();
   if(name==='charts') renderMainCharts(enrich(getPortfolio()),0,0,0,ccl());
   if(name==='dividends') renderDividends();
+  if(name==='notes') renderNotes();
   if(name==='watchlist'){
     renderWatchlist();
     // Refresh automático si los precios cacheados son viejos (> 30 min)
