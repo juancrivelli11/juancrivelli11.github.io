@@ -1220,13 +1220,34 @@ function safeParse(key, fallback){
     return (v === null && fallback !== null) ? fallback : v;
   }catch(e){
     console.error('Dato guardado corrupto en', key, e);
-    try{ localStorage.setItem(key + '_corrupt_' + Date.now(), localStorage.getItem(key)); }catch(_){ }
+    // Backup de UNA sola vez por key. Antes se creaba un backup nuevo con
+    // timestamp en CADA carga de página si el dato seguía corrupto, lo que
+    // llenaba localStorage silenciosamente tras varios reloads.
+    try{
+      const alreadyBackedUp = Object.keys(localStorage).some(k => k.startsWith(key + '_corrupt_'));
+      if(!alreadyBackedUp) localStorage.setItem(key + '_corrupt_' + Date.now(), localStorage.getItem(key));
+    }catch(_){ }
     return fallback;
   }
 }
+// Escritura segura: si localStorage está lleno (QuotaExceededError) u otro error
+// ocurre, no se pierde en silencio — devuelve false y el que llama puede avisar.
+function safeSet(key, value){
+  try{ localStorage.setItem(key, value); return true; }
+  catch(e){
+    console.error('No se pudo guardar', key, e);
+    return false;
+  }
+}
+// Limpia backups de datos corruptos viejos (liberan espacio; ya cumplieron su función).
+function purgeCorruptBackups(){
+  try{
+    Object.keys(localStorage).filter(k => k.includes('_corrupt_')).forEach(k => localStorage.removeItem(k));
+  }catch(_){ }
+}
 // Si un error de JS rompe la app, mostramos un aviso claro en vez de una página muerta.
 let _fatalShown = false;
-window.addEventListener('error', function(ev){
+function showFatalBanner(){
   if(_fatalShown) return;
   _fatalShown = true;
   try{
@@ -1235,7 +1256,23 @@ window.addEventListener('error', function(ev){
     d.innerHTML = '⚠️ Ocurrió un error inesperado. Tus datos están guardados. Probá recargar la página (Ctrl+F5). <button onclick="try{exportData()}catch(e){alert(\'No se pudo exportar\')}" style="background:#fff;color:#c62828;border:none;border-radius:4px;padding:4px 10px;cursor:pointer;font-weight:600">Descargar respaldo</button> <button onclick="this.parentElement.remove()" style="background:none;border:1px solid #fff;color:#fff;border-radius:4px;padding:4px 10px;cursor:pointer">Cerrar</button>';
     (document.body || document.documentElement).appendChild(d);
   }catch(_){ }
+}
+window.addEventListener('error', showFatalBanner);
+// IMPORTANTE: save() y otras funciones que leen/escriben datos son async.
+// Un error DENTRO de una función async (ej: localStorage lleno al guardar
+// precios u órdenes) se vuelve una promesa rechazada, no un throw normal —
+// window.addEventListener('error') NO la detecta, y el fallo queda invisible
+// para el usuario (justo el síntoma reportado: "no pasa nada, no se guarda").
+window.addEventListener('unhandledrejection', function(ev){
+  console.error('Promesa rechazada sin capturar:', ev.reason);
+  showFatalBanner();
 });
+// Limpieza única de backups de datos corruptos acumulados por versiones
+// anteriores del blindaje (creaban uno nuevo por reload en vez de uno solo).
+try{
+  const oldBackups = Object.keys(localStorage).filter(k => k.includes('_corrupt_'));
+  if(oldBackups.length > 1) purgeCorruptBackups();
+}catch(_){ }
 let portfolios = safeParse('pf6_portfolios', null);
 let currentPortfolioId = localStorage.getItem('pf6_currentPortfolio') || null;
 
@@ -1951,6 +1988,19 @@ function makeLogo(ticker, type, size=26){
 // ═══════════════════════════════════════════════════════════════════════════
 const CASH_LIST = ['USD','ARS','USDT','USDC','DAI','BUSD','PESOS','CASH'];
 
+// ═══ Proxies CORS para Yahoo Finance ═══
+// corsproxy.io empezó a devolver 403 (Forbidden) en TODOS los pedidos — el
+// servicio gratuito bloqueó el origen. Se agrega codetabs como alternativa
+// confiable y se lo prueba PRIMERO; corsproxy queda último por si algún día
+// se recupera. Fuente única para las 7 funciones que buscan precios.
+function yahooProxies(){
+  return [
+    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+  ];
+}
+
 // Withholding tax sobre dividendos. Depende del TIPO de activo Y del broker
 // porque la fiscalidad cambia: un CEDEAR en IOL Argentina retiene 15% (convenio AR-USA),
 // mientras que la misma acción USA comprada en IB retiene 30% (US non-resident).
@@ -2436,10 +2486,7 @@ function yahooPrevClose(result){
 }
 async function fetchArgPrice(ticker){
   const sym=ticker+'.BA';
-  const proxies=[
-    url=>`https://corsproxy.io/?${encodeURIComponent(url)}`,
-    url=>`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  ];
+  const proxies=yahooProxies();
   for(const proxy of proxies){
     for(const base of ['https://query1','https://query2']){
       try{
@@ -2466,7 +2513,7 @@ async function fetchUSPrice(sym){
   // PRIMARIO: Yahoo Finance — más confiable para previousClose.
   // FMP free tier devuelve previousClose desactualizado para algunos tickers,
   // causando Var% diarios con signo opuesto al real (confirmado con datos del usuario).
-  for(const proxy of [u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`]){
+  for(const proxy of yahooProxies()){
     for(const base of ['https://query1','https://query2']){
       try{
         const url=`${base}.finance.yahoo.com/v8/finance/chart/${sym}?interval=1d&range=5d`;
@@ -2958,10 +3005,7 @@ function calcReturn(closes, dates, daysAgo){
 async function fetchWatchHistory(ticker, type){
   const symbol = yahooSymbolFor(ticker, type);
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=3y&interval=1d`;
-  const proxies = [
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  ];
+  const proxies = yahooProxies();
   for(const proxy of proxies){
     try{
       const r = await fetch(proxy(url));
@@ -4027,7 +4071,7 @@ function renderSidebarPie(pf, title, totVal){
 // SIDEBAR MARKET DATA
 // ═══════════════════════════════════════════════════════════════════════════
 async function fetchYahooQuote(sym){
-  for(const proxy of [u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`]){
+  for(const proxy of yahooProxies()){
     for(const base of ['https://query1','https://query2']){
       try{
         const url=`${base}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`;
@@ -4206,10 +4250,7 @@ async function fetchFundamentalsAV(symbol){
 async function fetchFundamentalsYahoo(symbol){
   const modules = 'price,summaryDetail,defaultKeyStatistics,financialData,assetProfile,calendarEvents';
   const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=${modules}`;
-  const proxies = [
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  ];
+  const proxies = yahooProxies();
   for(const proxy of proxies){
     try{
       const r = await fetch(proxy(url));
@@ -4277,10 +4318,7 @@ async function fetchFundamentals(symbol, type){
 // Retorna array de { date: 'YYYY-MM-DD', amount: number, ts: unix }
 async function fetchDividends(symbol, rangeYears=5){
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${rangeYears}y&interval=1d&events=div`;
-  const proxies = [
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  ];
+  const proxies = yahooProxies();
   for(const proxy of proxies){
     try{
       const r = await fetch(proxy(url));
@@ -4303,10 +4341,7 @@ async function fetchDividends(symbol, rangeYears=5){
 
 async function fetchPriceHistory1Y(symbol){
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1y&interval=1d`;
-  const proxies = [
-    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  ];
+  const proxies = yahooProxies();
   for(const proxy of proxies){
     try{
       const r = await fetch(proxy(url));
@@ -5763,7 +5798,19 @@ function importData(event){
 function el(id){return document.getElementById(id);}
 // ═══ NOTAS: bloc personal estilo chat, guardado por portfolio ═══
 function getNotes(){ const n = safeParse(pfKey('notes'), []); return Array.isArray(n) ? n : []; }
-function saveNotes(list){ localStorage.setItem(pfKey('notes'), JSON.stringify(list)); }
+function saveNotes(list){
+  const ok = safeSet(pfKey('notes'), JSON.stringify(list));
+  if(!ok){
+    // Reintentar una vez liberando espacio de backups viejos antes de rendirse.
+    purgeCorruptBackups();
+    const ok2 = safeSet(pfKey('notes'), JSON.stringify(list));
+    if(!ok2){
+      alert('⚠️ No se pudo guardar la nota: el almacenamiento del navegador está lleno.\n\nProbá exportar tu portfolio (botón "Export" arriba) como respaldo, y avisale a soporte.');
+      return false;
+    }
+  }
+  return true;
+}
 function renderNotes(){
   const feed = el('notesFeed'); if(!feed) return;
   const notes = getNotes();
@@ -5784,7 +5831,7 @@ function addNote(){
   if(!text) return;
   const notes = getNotes();
   notes.push({ id: 'n' + Date.now() + Math.floor(Math.random()*1000), ts: Date.now(), text });
-  saveNotes(notes); inp.value = ''; renderNotes(); inp.focus();
+  if(saveNotes(notes)){ inp.value = ''; renderNotes(); inp.focus(); }
 }
 function deleteNote(id){
   if(!confirm('¿Borrar esta nota?')) return;
