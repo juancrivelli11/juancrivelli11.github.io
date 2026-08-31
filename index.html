@@ -1745,7 +1745,10 @@ async function supaLoad(){
   try{
     // La nube es la única fuente de verdad: vaciamos lo local primero
     // así una cuenta sin datos no "hereda" lo que dejó otro usuario.
-    Object.keys(localStorage).forEach(k => { if(k.startsWith('pf6_p_')) localStorage.removeItem(k); });
+    // EXCEPCIÓN: las notas (_notes) son un bloc personal que vive SOLO en
+    // este navegador — nunca se sincronizan a la nube, así que si las
+    // borrábamos acá, cada login/recarga de sesión las destruía sin aviso.
+    Object.keys(localStorage).forEach(k => { if(k.startsWith('pf6_p_') && !k.endsWith('_notes')) localStorage.removeItem(k); });
     orders = []; snapshots = []; watchlist = []; brokerCurrencyPrefs = {};
     brokers = JSON.parse(JSON.stringify(DEFAULT_BROKERS));
     // === SETTINGS primero (para saber portfolios y current) ===
