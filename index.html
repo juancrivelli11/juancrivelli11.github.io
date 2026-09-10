@@ -2597,12 +2597,36 @@ async function doRefresh(force=false){
   // TODOS usan .BA porque sus precios ya reflejan el ratio CEDEAR y spread local.
   // Usar el ticker US directo sin aplicar ratio devolvía valuaciones 5x-50x infladas.
   const argAssets=pf.filter(a=>isARS(a.type));
-  for(const a of argAssets){
-    if(isCash(a.ticker)){
-      prices[a.ticker]=1; prices[a.ticker+'_prev']=1; prices[a.ticker+'_ars']=true; continue;
-    }
-    const data=await fetchArgPrice(a.ticker);
-    if(data?.price>0){prices[a.ticker]=data.price;prices[a.ticker+'_prev']=data.prev;prices[a.ticker+'_ars']=true;}
+  argAssets.filter(a=>isCash(a.ticker)).forEach(a=>{
+    prices[a.ticker]=1; prices[a.ticker+'_prev']=1; prices[a.ticker+'_ars']=true;
+  });
+  const argToFetch = argAssets.filter(a=>!isCash(a.ticker));
+  // Fetch en paralelo con concurrencia limitada — antes era secuencial (uno
+  // por uno), lo que con muchos CEDEARs tardaba varios minutos en total.
+  if(argToFetch.length){
+    const CONCURRENCY_ARG = 8;
+    let cursorArg = 0;
+    let doneArg = 0;
+    setStatus(`Obteniendo precios ARG (0/${argToFetch.length})...`, true);
+    await Promise.all(Array(CONCURRENCY_ARG).fill(0).map(async () => {
+      while(true){
+        const i = cursorArg++;
+        if(i >= argToFetch.length) break;
+        const a = argToFetch[i];
+        try{
+          const data = await fetchArgPrice(a.ticker);
+          if(data?.price > 0){
+            prices[a.ticker] = data.price;
+            prices[a.ticker+'_prev'] = data.prev;
+            prices[a.ticker+'_ars'] = true;
+          }
+        }catch(e){}
+        doneArg++;
+        if(doneArg % 5 === 0 || doneArg === argToFetch.length){
+          setStatus(`Obteniendo precios ARG (${doneArg}/${argToFetch.length})...`, true);
+        }
+      }
+    }));
   }
   // US assets
   const STABLE = ['USD','USDC','BUSD','DAI'];
