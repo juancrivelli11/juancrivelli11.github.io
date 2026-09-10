@@ -1998,6 +1998,10 @@ const CASH_LIST = ['USD','ARS','USDT','USDC','DAI','BUSD','PESOS','CASH'];
 // se recupera. Fuente única para las 7 funciones que buscan precios.
 function yahooProxies(){
   return [
+    // Proxy propio (Cloudflare Worker) — no depende de servicios gratuitos
+    // de terceros que se saturan o bloquean. Primera opción siempre.
+    u => `https://crifund-proxy.juancrivelli11.workers.dev/?url=${encodeURIComponent(u)}`,
+    // Respaldo por si el Worker propio tuviera algún problema puntual.
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
