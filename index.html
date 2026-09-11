@@ -3574,7 +3574,10 @@ function renderOrders(){
   filtered.forEach(o=>{
     const div=document.createElement('div');
     div.className=`ord-card ${o.action==='Compra'?'buy':'sell'}`;
-    const totalUSD = o.qty*o.price+(o.comm||0);
+    // En una Venta, la comisión se DESCUENTA de lo que cobrás; en una Compra
+    // se SUMA a lo que pagás. Antes se sumaba siempre, inflando el total mostrado
+    // en las ventas por el doble de la comisión.
+    const totalUSD = o.qty*o.price + (o.action==='Compra' ? (o.comm||0) : -(o.comm||0));
     // Total en la moneda original de la orden. Para órdenes ARS usamos el CCL
     // del momento de la orden (cclAtOrder) si lo tenemos, sino el CCL actual.
     const isOrdARS = o.currency === 'ARS';
@@ -4986,9 +4989,12 @@ function calcTotal(){
   const qty=parseFloat(el('oQty').value)||0;
   const price=parseFloat(el('oPrice').value)||0;
   const comm=parseFloat(el('oComm').value)||0;
-  const total=qty*price+comm;
+  const actionVal=el('oAction').value;
+  // En una Venta la comisión se descuenta de lo que cobrás; en una Compra se
+  // suma a lo que pagás. Antes se sumaba siempre acá también.
+  const total=qty*price + (actionVal==='Compra' ? comm : -comm);
   const mktVal=el('oMarket').value;
-  const isA=(mktVal==='cedear'||mktVal==='arg'||mktVal==='bono')&&el('oAction').value==='Compra';
+  const isA=(mktVal==='cedear'||mktVal==='arg'||mktVal==='bono')&&actionVal==='Compra';
   const c=ccl();
   el('oTotal').textContent=total>0?(isA?`$${n2(total,0)} ARS`:`$${n2(total,2)} USD`):'$0,00';
   el('oTotalSub').textContent=total>0?(isA?`≈ USD ${n2(total/c,2)}`:`≈ ARS ${n2(total*c,0)}`):'';
