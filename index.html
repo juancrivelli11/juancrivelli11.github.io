@@ -3114,26 +3114,53 @@ function renderWatchlist(){
     const sign = r >= 0 ? '+' : '';
     return `<span class="${cls}">${sign}${n2(r,2)}%</span>`;
   };
-  tbody.innerHTML = watchlist.map(w => {
-    const cached = _watchPrices[w.ticker+'_'+w.type];
-    const px = cached?.price;
-    const ret = cached?.returns || {};
-    const typeLabel = {usa:'USA',cedear:'CEDEAR',arg:'Argentina',cripto:'Cripto',bono:'Bono'}[w.type] || w.type;
-    return `<tr style="border-bottom:1px solid var(--blueL)">
-      <td style="padding:6px 8px;font-weight:600;color:var(--blue);cursor:pointer" onclick="openFundamentals('${w.ticker}','${typeLabel}')">${w.ticker}</td>
-      <td style="padding:6px 8px;font-size:11px;color:var(--muted)">${typeLabel}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:600">${px != null ? '$'+n2(px,2) : '—'}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.d1)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.d7)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.m1)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.m6)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.y1)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.y3)}</td>
-      <td style="padding:6px 8px;text-align:right">
-        <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px" onclick="removeFromWatchlist('${w.ticker}','${w.type}')" title="Quitar del seguimiento">✕</button>
-      </td>
-    </tr>`;
+  // Agrupar por categoría (segment). '' = "Sin categoría", siempre al final.
+  const allSegments = [...new Set(watchlist.map(w => w.segment || ''))];
+  allSegments.sort((a,b) => a === '' ? 1 : b === '' ? -1 : a.localeCompare(b));
+  const rowsHtml = allSegments.map(seg => {
+    const group = watchlist
+      .map((w,i) => ({w,i}))
+      .filter(x => (x.w.segment||'') === seg)
+      .sort((a,b) => watchOrderOf(a.w,a.i) - watchOrderOf(b.w,b.i));
+    const segLabel = seg === '' ? 'Sin categoría' : seg;
+    const headerRow = `<tr style="background:var(--blueLL)"><td colspan="10" style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:0.5px">${segLabel} <span style="font-weight:400;color:var(--muted);text-transform:none">(${group.length})</span></td></tr>`;
+    const itemRows = group.map((x, posInGroup) => {
+      const w = x.w;
+      const cached = _watchPrices[w.ticker+'_'+w.type];
+      const px = cached?.price;
+      const ret = cached?.returns || {};
+      const typeLabel = {usa:'USA',cedear:'CEDEAR',arg:'Argentina',cripto:'Cripto',bono:'Bono'}[w.type] || w.type;
+      const segOptions = allSegments.filter(s=>s!=='').map(s =>
+        `<option value="${s}" ${s===seg?'selected':''}>${s}</option>`
+      ).join('');
+      const selectHtml = `<select onchange="setWatchSegment('${w.ticker}','${w.type}',this.value)" style="font-size:10px;padding:2px 4px;border:1px solid var(--blueL);border-radius:4px;background:var(--card);color:var(--txt);max-width:90px">
+        <option value="" ${seg===''?'selected':''}>Sin categoría</option>
+        ${segOptions}
+        <option value="__new__">＋ Nueva...</option>
+      </select>`;
+      const upDis = posInGroup === 0 ? 'disabled style="opacity:0.25;cursor:default"' : '';
+      const downDis = posInGroup === group.length-1 ? 'disabled style="opacity:0.25;cursor:default"' : '';
+      return `<tr style="border-bottom:1px solid var(--blueL)">
+        <td style="padding:6px 8px;font-weight:600;color:var(--blue);cursor:pointer" onclick="openFundamentals('${w.ticker}','${typeLabel}')">${w.ticker}</td>
+        <td style="padding:6px 8px;font-size:11px;color:var(--muted)">${typeLabel}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:600">${px != null ? '$'+n2(px,2) : '—'}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.d1)}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.d7)}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.m1)}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.m6)}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.y1)}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:monospace">${fmtRet(ret.y3)}</td>
+        <td style="padding:6px 8px;text-align:right;white-space:nowrap">
+          <button ${upDis} onclick="moveWatchItem('${w.ticker}','${w.type}',-1)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px" title="Subir">▲</button>
+          <button ${downDis} onclick="moveWatchItem('${w.ticker}','${w.type}',1)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px" title="Bajar">▼</button>
+          ${selectHtml}
+          <button style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px" onclick="removeFromWatchlist('${w.ticker}','${w.type}')" title="Quitar del seguimiento">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+    return headerRow + itemRows;
   }).join('');
+  tbody.innerHTML = rowsHtml;
 }
 
 function removeFromWatchlist(ticker, type){
@@ -3155,8 +3182,44 @@ function addWatchItem(ticker, type){
   const t = (ticker||'').trim().toUpperCase();
   if(!t) return false;
   if(watchlist.some(w => w.ticker === t && w.type === type)) return false; // ya existe
-  watchlist.push({ ticker: t, type, addedAt: Date.now() });
+  const maxOrder = watchlist.reduce((m,w,i) => Math.max(m, (typeof w.order==='number'?w.order:i)), -1);
+  watchlist.push({ ticker: t, type, addedAt: Date.now(), segment: '', order: maxOrder + 1 });
   return true;
+}
+// Orden efectivo de un item: usa el campo order si existe, sino su posición
+// actual en el array (compatibilidad con listas guardadas antes de esta función).
+function watchOrderOf(w, idx){ return typeof w.order === 'number' ? w.order : idx; }
+// Mueve un activo un lugar arriba/abajo DENTRO de su misma categoría.
+function moveWatchItem(ticker, type, dir){
+  const seg = (watchlist.find(w => w.ticker===ticker && w.type===type)?.segment) || '';
+  const group = watchlist
+    .map((w,i) => ({w, i}))
+    .filter(x => (x.w.segment||'') === seg)
+    .sort((a,b) => watchOrderOf(a.w,a.i) - watchOrderOf(b.w,b.i));
+  const pos = group.findIndex(x => x.w.ticker===ticker && x.w.type===type);
+  const swapWith = pos + dir;
+  if(pos < 0 || swapWith < 0 || swapWith >= group.length) return;
+  // Asegurar que TODOS los items del grupo tengan un order numérico propio antes de intercambiar.
+  group.forEach((x, i) => { x.w.order = i; });
+  const tmp = group[pos].w.order;
+  group[pos].w.order = group[swapWith].w.order;
+  group[swapWith].w.order = tmp;
+  saveWatchlist();
+  renderWatchlist();
+}
+// Asigna (o crea) una categoría para un activo de seguimiento.
+function setWatchSegment(ticker, type, value){
+  const w = watchlist.find(x => x.ticker===ticker && x.type===type);
+  if(!w) return;
+  if(value === '__new__'){
+    const name = prompt('Nombre de la nueva categoría:');
+    if(!name || !name.trim()){ renderWatchlist(); return; } // sin cambios, sólo re-render para resetear el <select>
+    w.segment = name.trim();
+  } else {
+    w.segment = value;
+  }
+  saveWatchlist();
+  renderWatchlist();
 }
 
 function addManualWatch(){
