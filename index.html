@@ -485,7 +485,10 @@ body.dark #auth-welcome h2{color:#90caf9}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <button class="back-btn" onclick="hideBrokerDetail()" style="margin-bottom:0">← Volver</button>
           <div class="sec-title" id="brokerDetailTitle"></div>
-          <button class="btn btn-green" onclick="openOverlay('order')" style="font-size:12px;padding:6px 12px">+ Nueva orden</button>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-gold" onclick="openLiqModal()" style="font-size:12px;padding:6px 12px">💰 Liquidez</button>
+            <button class="btn btn-green" onclick="openOverlay('order')" style="font-size:12px;padding:6px 12px">+ Nueva orden</button>
+          </div>
         </div>
         <div id="brokerDetailKpi"></div>
         <div id="brokerDetailTable"></div>
@@ -703,6 +706,42 @@ body.dark #auth-welcome h2{color:#90caf9}
     </div>
   </div>
 </div><!-- /body-wrap -->
+<!-- MINI-MODAL CARGA RÁPIDA DE LIQUIDEZ -->
+<div class="overlay" id="overlay-liq">
+<div class="modal" style="max-width:340px">
+  <div class="modal-hdr">
+    <h2>💰 Cargar liquidez</h2>
+    <button class="modal-x" onclick="closeLiqModal()">×</button>
+  </div>
+  <div class="field"><label>Broker</label>
+    <select id="liqBroker"><option value="">— Seleccionar —</option></select>
+  </div>
+  <div class="field"><label>Moneda</label>
+    <select id="liqMoneda">
+      <option value="USD">USD</option>
+      <option value="ARS">ARS</option>
+      <option value="USDT">USDT</option>
+      <option value="USDC">USDC</option>
+    </select>
+  </div>
+  <div class="field"><label>Monto</label>
+    <input id="liqMonto" type="number" inputmode="decimal" placeholder="1000.00" min="0" step="any">
+  </div>
+  <div class="field"><label>Movimiento</label>
+    <div style="display:flex;gap:8px">
+      <button id="liqBtnIn"  class="btn btn-green" style="flex:1;font-size:14px;padding:10px" onclick="setLiqDir('Compra')">↓ Ingreso</button>
+      <button id="liqBtnOut" class="btn btn-ghost" style="flex:1;font-size:14px;padding:10px" onclick="setLiqDir('Venta')">↑ Egreso</button>
+    </div>
+  </div>
+  <div class="field"><label>Fecha</label>
+    <input id="liqDate" type="date">
+  </div>
+  <div class="modal-btns">
+    <button class="btn btn-green" onclick="saveLiq()">Registrar</button>
+    <button class="btn btn-ghost" onclick="closeLiqModal()">Cancelar</button>
+  </div>
+</div>
+</div>
 <!-- LIQUIDEZ DETAIL OVERLAY -->
 <div class="overlay" id="overlay-liquidez">
 <div class="modal" style="max-width:680px;max-height:92vh;overflow-y:auto">
@@ -6039,6 +6078,53 @@ document.addEventListener('click', (e) => {
 });
 function openOverlay(name){el('overlay-'+name).classList.add('open');}
 function closeOverlay(name){el('overlay-'+name).classList.remove('open');}
+
+// ── LIQUIDEZ RÁPIDA ──────────────────────────────────────────────────────
+let _liqDir='Compra', _liqBrokerPreset='';
+function openLiqModal(){
+  const title=el('brokerDetailTitle');
+  _liqBrokerPreset=title?title.textContent.replace(/[^\w\s\-áéíóúñÁÉÍÓÚÑ]/g,'').trim():'';
+  const sel=el('liqBroker');
+  sel.innerHTML='<option value="">— Seleccionar —</option>';
+  brokers.forEach(b=>{
+    const o=document.createElement('option');
+    o.value=b;o.textContent=b;
+    if(b===_liqBrokerPreset)o.selected=true;
+    sel.appendChild(o);
+  });
+  el('liqDate').value=new Date().toISOString().slice(0,10);
+  el('liqMonto').value='';
+  setLiqDir('Compra');
+  el('overlay-liq').classList.add('open');
+}
+function closeLiqModal(){el('overlay-liq').classList.remove('open');}
+function setLiqDir(dir){
+  _liqDir=dir;
+  el('liqBtnIn').className ='btn '+(dir==='Compra'?'btn-green':'btn-ghost');
+  el('liqBtnOut').className='btn '+(dir==='Venta' ?'btn-gold' :'btn-ghost');
+  ['liqBtnIn','liqBtnOut'].forEach(id=>{el(id).style.flex='1';el(id).style.fontSize='14px';el(id).style.padding='10px';});
+}
+function saveLiq(){
+  const broker=el('liqBroker').value;
+  const moneda=el('liqMoneda').value;
+  const monto=parseFloat(el('liqMonto').value);
+  const fecha=el('liqDate').value;
+  if(!broker){alert('Seleccioná un broker');return;}
+  if(!monto||monto<=0){alert('Ingresá un monto válido');return;}
+  if(!fecha){alert('Seleccioná una fecha');return;}
+  const typeMap={USD:'Acción USA',ARS:'Acción Argentina',USDT:'Cripto',USDC:'Cripto'};
+  orders.push({
+    id:Date.now(),ticker:moneda,type:typeMap[moneda]||'Acción USA',
+    action:_liqDir,qty:monto,price:1,
+    priceOrig:monto,currency:moneda==='ARS'?'ARS':'USD',
+    cclAtOrder:moneda==='ARS'?ccl():null,
+    comm:0,broker,date:fecha,
+    notes:`Liquidez ${_liqDir==='Compra'?'ingreso':'egreso'} rápido`
+  });
+  save();closeLiqModal();render();
+  if(_liqBrokerPreset)renderBrokerDetail(_liqBrokerPreset);
+  setStatus(`${_liqDir==='Compra'?'↓':'↑'} Liquidez ${moneda} ${monto.toLocaleString('es-AR')} registrada`,false);
+}
 // ═══════════════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════════════
