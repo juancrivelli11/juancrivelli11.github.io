@@ -2180,6 +2180,8 @@ function getPortfolio(broker=null){
       m.cost     -= m.cost*r;
       m.costOrig -= m.costOrig*r;
       m.qty      -= o.qty;
+      m.cost     += (o.comm||0); // comisión de venta reduce el PnL
+      m.comm     += (o.comm||0);
     }
   });
   return Object.values(map).filter(a=>a.qty>0.0001).map(a=>({
