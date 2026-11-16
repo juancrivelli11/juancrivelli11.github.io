@@ -304,6 +304,7 @@ body.logged-out .hdr-name,
 body.logged-out #btnCur,
 body.logged-out #btnRef,
 body.logged-out #btnFMP,
+body.logged-out #btnPaises,
 body.logged-out .hdr-btns button[onclick*="exportData"],
 body.logged-out .hdr-btns button[onclick*="impFile"]{display:none!important}
 body.logged-out #auth-welcome{display:flex}
@@ -336,6 +337,7 @@ body.dark #auth-welcome h2{color:#90caf9}
     <button class="btn btn-blue" onclick="exportData()">⬇ Export</button>
     <button class="btn btn-blue" onclick="document.getElementById('impFile').click()">⬆ Import</button>
     <input type="file" id="impFile" accept=".json,application/json,text/plain,*/*" style="display:none" onchange="importData(event)">
+    <button class="btn btn-blue" onclick="openPaisesModal()" id="btnPaises" title="Asignar países a CEDEARs">🌍 Países</button>
     <button class="btn btn-gold" onclick="configFMP()" id="btnFMP">⚙ FMP</button>
     <button class="btn btn-green" onclick="doRefresh(true)" id="btnRef">↻ Actualizar</button>
     <button class="btn btn-blue" onclick="handleAuth()" id="btnAuth">Iniciar sesión</button>
@@ -6237,7 +6239,87 @@ renderBrokerGrid();
     }catch(e){}
   }
 })();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURAR PAÍSES — modal para asignar países a CEDEARs existentes
+// ═══════════════════════════════════════════════════════════════════════════
+function openPaisesModal(){
+  // Recolectar todos los tickers CEDEAR que hay en orders
+  const cedearTickers = [...new Set(
+    orders
+      .filter(o => (o.market||'').toLowerCase() === 'cedear' && o.ticker)
+      .map(o => o.ticker.toUpperCase())
+  )].sort();
+
+  const saved = getTickerCountries();
+  const container = document.getElementById('paisesListContainer');
+  container.innerHTML = '';
+
+  if(cedearTickers.length === 0){
+    container.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px 0">No tenés CEDEARs registrados todavía.</p>';
+  } else {
+    const opts = [
+      {v:'',    l:'— Sin asignar —'},
+      {v:'US',  l:'🇺🇸 Estados Unidos'},
+      {v:'AR',  l:'🇦🇷 Argentina'},
+      {v:'CN',  l:'🇨🇳 China'},
+      {v:'BR',  l:'🇧🇷 Brasil'},
+      {v:'EU',  l:'🇪🇺 Europa'},
+      {v:'OTHER', l:'🌍 Otro'},
+    ];
+    cedearTickers.forEach(ticker => {
+      const current = saved[ticker] || '';
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--card);border:1px solid var(--border);border-radius:8px';
+      const optionsHtml = opts.map(o => `<option value="${o.v}"${o.v===current?' selected':''}>${o.l}</option>`).join('');
+      row.innerHTML = `
+        <span style="font-weight:700;font-size:14px;min-width:80px;color:var(--fg)">${ticker}</span>
+        <select data-ticker="${ticker}" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--inp);color:var(--fg);font-size:13px">
+          ${optionsHtml}
+        </select>
+      `;
+      container.appendChild(row);
+    });
+  }
+
+  document.getElementById('overlay-paises').classList.add('open');
+}
+function closePaisesModal(){
+  document.getElementById('overlay-paises').classList.remove('open');
+}
+function savePaisesModal(){
+  const selects = document.querySelectorAll('#paisesListContainer select[data-ticker]');
+  selects.forEach(sel => {
+    const ticker = sel.dataset.ticker;
+    const country = sel.value;
+    if(ticker && country) saveTickerCountry(ticker, country);
+    else if(ticker && !country){
+      // Si dejaron "sin asignar", borramos del mapa para que no aparezca badge
+      const map = getTickerCountries();
+      delete map[ticker];
+      localStorage.setItem('pf6_ticker_countries', JSON.stringify(map));
+    }
+  });
+  closePaisesModal();
+  // Re-renderizar la tabla del portfolio para reflejar los cambios
+  if(typeof renderTable === 'function') renderTable();
+}
 </script>
+<!-- CONFIGURAR PAÍSES OVERLAY -->
+<div class="overlay" id="overlay-paises">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-hdr">
+      <h2>🌍 Configurar países de CEDEARs</h2>
+      <button class="modal-x" onclick="closePaisesModal()">×</button>
+    </div>
+    <p style="margin:0 0 14px;color:var(--muted);font-size:13px">Asigná el país de origen a tus CEDEARs. Sirve para los badges de colores en el portfolio.</p>
+    <div id="paisesListContainer" style="max-height:60vh;overflow-y:auto;display:flex;flex-direction:column;gap:10px"></div>
+    <div class="modal-btns" style="margin-top:16px">
+      <button class="btn btn-green" onclick="savePaisesModal()">Guardar</button>
+      <button class="btn btn-ghost" onclick="closePaisesModal()">Cerrar</button>
+    </div>
+  </div>
+</div>
 <!-- build: 2026-08-12 redeploy -->
 </body>
 </html>
