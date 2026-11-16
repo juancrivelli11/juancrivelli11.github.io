@@ -2060,14 +2060,26 @@ function getAssetCountry(ticker, type){
   }
   return null;
 }
-// Devuelve el HTML completo del div .typ con color de fondo según país
+// Devuelve el HTML del div .typ — sólo el flag adelante, sin fondo (el color va en el tr)
 function typWithCountry(ticker, type){
   const country = getAssetCountry(ticker, type);
-  if(!country){
-    return `<div class="typ">${type}</div>`;
-  }
+  if(!country) return `<div class="typ">${type}</div>`;
   const s = COUNTRY_STYLE[country] || COUNTRY_STYLE.OTHER;
-  return `<div class="typ" style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:5px;background:${s.bg};color:${s.text};font-weight:600;white-space:nowrap">${s.flag} ${type}</div>`;
+  return `<div class="typ">${s.flag} ${type}</div>`;
+}
+// Devuelve el color de fondo suave para la fila según país (rgba muy transparente)
+function rowBgForCountry(ticker, type){
+  const country = getAssetCountry(ticker, type);
+  if(!country) return '';
+  const MAP = {
+    AR:    'rgba(26,111,186,0.07)',
+    US:    'rgba(45,74,122,0.07)',
+    CN:    'rgba(176,28,28,0.07)',
+    BR:    'rgba(26,122,60,0.07)',
+    EU:    'rgba(74,45,138,0.07)',
+    OTHER: 'rgba(74,74,90,0.07)',
+  };
+  return MAP[country] || '';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -3028,6 +3040,8 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
           ? (isARS(a.type) ? $a(a.cost*c) : $u(a.cost)) + ' <span style="font-size:9px;color:var(--muted)">(costo)</span>'
           : '—');
     const tr=document.createElement('tr');
+    const _rowBg = rowBgForCountry(a.ticker, a.type);
+    if(_rowBg) tr.style.background = _rowBg;
     // Asset cell
     const td=document.createElement('td');
     const cell=document.createElement('div');cell.className='asset-cell';
