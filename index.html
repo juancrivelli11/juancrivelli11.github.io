@@ -435,9 +435,11 @@ body.dark #auth-welcome h2{color:#90caf9}
         <button class="btn btn-green" onclick="openOverlay('order')">+ Nueva orden</button>
       </div>
       <!-- Chips de filtro por tipo de activo -->
-      <div id="assetTypeFilters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+      <div id="assetTypeFilters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;align-items:center">
         <span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-right:4px">Filtros:</span>
       </div>
+      <!-- Chips de filtro por país -->
+      <div id="assetCountryFilters" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center"></div>
       <div id="assetTable"></div>
       <div id="cashSection" style="display:none;margin-top:12px">
         <div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:8px">💰 LIQUIDEZ</div>
@@ -2041,12 +2043,12 @@ function makeLogo(ticker, type, size=26){
 // País de origen por ticker — para CEDEARs guardado en localStorage
 // Para otros tipos se infiere directamente del type
 const COUNTRY_STYLE = {
-  AR: { flag:'🇦🇷', bg:'#74b9ff22', border:'#74b9ffaa', text:'#2980b9' },
-  US: { flag:'🇺🇸', bg:'#dfe6e922', border:'#b2bec3aa', text:'#636e72' },
-  CN: { flag:'🇨🇳', bg:'#ff767522', border:'#ff7675aa', text:'#c0392b' },
-  BR: { flag:'🇧🇷', bg:'#55efc422', border:'#00b894aa', text:'#00695c' },
-  EU: { flag:'🇪🇺', bg:'#a29bfe22', border:'#6c5ce7aa', text:'#5f27cd' },
-  OTHER: { flag:'🌍', bg:'#dfe6e922', border:'#b2bec3aa', text:'#636e72' },
+  AR: { flag:'🇦🇷', bg:'#1a6fbacc', text:'#e8f4fd' },
+  US: { flag:'🇺🇸', bg:'#2d4a7acc', text:'#c8d8f0' },
+  CN: { flag:'🇨🇳', bg:'#b01c1ccc', text:'#fce8e8' },
+  BR: { flag:'🇧🇷', bg:'#1a7a3ccc', text:'#e0f7ea' },
+  EU: { flag:'🇪🇺', bg:'#4a2d8acc', text:'#e8e0f7' },
+  OTHER: { flag:'🌍', bg:'#4a4a5acc', text:'#e0e0ea' },
 };
 function getAssetCountry(ticker, type){
   if(type==='Acción USA') return 'US';
@@ -2058,11 +2060,14 @@ function getAssetCountry(ticker, type){
   }
   return null;
 }
-function countryBadge(ticker, type){
+// Devuelve el HTML completo del div .typ con color de fondo según país
+function typWithCountry(ticker, type){
   const country = getAssetCountry(ticker, type);
-  if(!country) return '';
+  if(!country){
+    return `<div class="typ">${type}</div>`;
+  }
   const s = COUNTRY_STYLE[country] || COUNTRY_STYLE.OTHER;
-  return `<span style="display:inline-block;font-size:9px;padding:1px 5px;border-radius:4px;background:${s.bg};border:1px solid ${s.border};color:${s.text};margin-top:2px;line-height:1.4">${s.flag}</span>`;
+  return `<div class="typ" style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:5px;background:${s.bg};color:${s.text};font-weight:600;white-space:nowrap">${s.flag} ${type}</div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2176,6 +2181,62 @@ function renderAssetTypeFilters(pf){
   }
   wrap.innerHTML = html;
 }
+
+// ── Filtro por país ──────────────────────────────────────────────────────────
+let hiddenCountries = new Set(safeParse('pf6_hiddenCountries', []));
+
+const COUNTRY_FILTER_DEFS = [
+  { id:'US',    label:'EE.UU.',    icon:'🇺🇸', chipBg:'#2d4a7a', chipText:'#c8d8f0' },
+  { id:'AR',    label:'Argentina', icon:'🇦🇷', chipBg:'#1a6fba', chipText:'#e8f4fd' },
+  { id:'CN',    label:'China',     icon:'🇨🇳', chipBg:'#b01c1c', chipText:'#fce8e8' },
+  { id:'BR',    label:'Brasil',    icon:'🇧🇷', chipBg:'#1a7a3c', chipText:'#e0f7ea' },
+  { id:'EU',    label:'Europa',    icon:'🇪🇺', chipBg:'#4a2d8a', chipText:'#e8e0f7' },
+  { id:'OTHER', label:'Otro',      icon:'🌍', chipBg:'#4a4a5a', chipText:'#e0e0ea' },
+  { id:'__none__', label:'Sin país', icon:'❓', chipBg:'#555', chipText:'#ddd' },
+];
+
+function toggleCountry(country){
+  if(hiddenCountries.has(country)) hiddenCountries.delete(country);
+  else hiddenCountries.add(country);
+  localStorage.setItem('pf6_hiddenCountries', JSON.stringify([...hiddenCountries]));
+  render();
+}
+function resetCountryFilters(){
+  hiddenCountries = new Set();
+  localStorage.setItem('pf6_hiddenCountries', '[]');
+  render();
+}
+
+function renderCountryFilters(pf){
+  const wrap = document.getElementById('assetCountryFilters');
+  if(!wrap) return;
+  // Qué países hay realmente en el portfolio
+  const present = new Map(); // countryId → count
+  pf.forEach(a => {
+    const c = getAssetCountry(a.ticker, a.type) || '__none__';
+    present.set(c, (present.get(c)||0) + 1);
+  });
+  // Sólo mostrar el row si hay más de 1 país distinto (excluir __none__ del conteo)
+  const realCountries = [...present.keys()].filter(k => k !== '__none__');
+  if(realCountries.length < 2 && !present.has('__none__')){ wrap.style.display='none'; return; }
+  wrap.style.display = 'flex';
+  let html = '<span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-right:4px">País:</span>';
+  COUNTRY_FILTER_DEFS.forEach(def => {
+    if(!present.has(def.id)) return;
+    const count = present.get(def.id);
+    const isHidden = hiddenCountries.has(def.id);
+    const bg   = isHidden ? 'transparent' : def.chipBg;
+    const col  = isHidden ? 'var(--muted)' : def.chipText;
+    const deco = isHidden ? 'line-through' : 'none';
+    const opacity = isHidden ? '0.55' : '1';
+    html += `<button onclick="toggleCountry('${def.id}')" style="padding:5px 11px;border-radius:18px;cursor:pointer;font-size:11px;font-weight:600;user-select:none;transition:all 0.15s;border:1px solid ${def.chipBg};background:${bg};color:${col};text-decoration:${deco};opacity:${opacity}" title="${isHidden?'Mostrar':'Ocultar'} ${def.label}">${def.icon} ${def.label} <span style="font-size:9px;opacity:0.75">(${count})</span></button>`;
+  });
+  if(hiddenCountries.size > 0){
+    html += `<button onclick="resetCountryFilters()" style="background:none;border:none;color:var(--blue);cursor:pointer;font-size:11px;text-decoration:underline;margin-left:6px">Mostrar todo</button>`;
+  }
+  wrap.innerHTML = html;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function getPortfolio(broker=null){
   const map={};
@@ -2914,10 +2975,15 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
   // Separate cash from investments
   if(containerId==='assetTable') renderCash(pf, null);
   pf = pf.filter(a=>!isCash(a.ticker));
-  // Aplicar filtros por tipo (solo en vista global)
+  // Aplicar filtros por tipo y país (solo en vista global)
   if(containerId === 'assetTable'){
     renderAssetTypeFilters(pf);
     pf = pf.filter(a => !hiddenAssetTypes.has(typeToCategory(a.type)));
+    renderCountryFilters(pf);
+    pf = pf.filter(a => {
+      const c = getAssetCountry(a.ticker, a.type) || '__none__';
+      return !hiddenCountries.has(c);
+    });
   }
   const el2=el(containerId);
   if(!pf.length){el2.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div>Sin activos para mostrar con los filtros actuales.</div></div>';return;}
@@ -2967,7 +3033,7 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
     const cell=document.createElement('div');cell.className='asset-cell';
     cell.appendChild(makeLogo(a.ticker,a.type,26));
     const info=document.createElement('div');info.className='ainfo';
-    info.innerHTML=`<div class="tkr" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:var(--muted);text-underline-offset:3px" title="Ver fundamentales" onclick="openFundamentals('${a.ticker}','${a.type}')">${a.ticker}</div><div class="typ" style="display:flex;align-items:center;gap:4px">${a.type}${countryBadge(a.ticker,a.type)}</div>`;
+    info.innerHTML=`<div class="tkr" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:var(--muted);text-underline-offset:3px" title="Ver fundamentales" onclick="openFundamentals('${a.ticker}','${a.type}')">${a.ticker}</div>${typWithCountry(a.ticker,a.type)}`;
     if(a.brkList?.length){
       const bd=document.createElement('div');bd.className='brks';
       a.brkList.forEach(b=>{const s=document.createElement('span');s.className='brk-tag';s.textContent=b;bd.appendChild(s);});
