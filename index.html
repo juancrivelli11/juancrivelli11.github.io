@@ -6245,9 +6245,10 @@ renderBrokerGrid();
 // ═══════════════════════════════════════════════════════════════════════════
 function openPaisesModal(){
   // Recolectar todos los tickers CEDEAR que hay en orders
+  // Las órdenes guardan el tipo en o.type === 'CEDEAR'
   const cedearTickers = [...new Set(
     orders
-      .filter(o => (o.market||'').toLowerCase() === 'cedear' && o.ticker)
+      .filter(o => (o.type||'').toUpperCase() === 'CEDEAR' && o.ticker)
       .map(o => o.ticker.toUpperCase())
   )].sort();
 
