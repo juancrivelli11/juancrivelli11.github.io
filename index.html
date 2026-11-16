@@ -1091,10 +1091,21 @@ body.dark #auth-welcome h2{color:#90caf9}
     <div class="field"><label>Ticker</label>
       <div class="ac-wrap">
         <input id="oTicker" placeholder="Escribí para buscar..." autocomplete="off"
-          oninput="onTickerInput(this.value)"
+          oninput="onTickerInput(this.value);onTickerChangeCountry(this.value)"
           onblur="setTimeout(hideAC,200)">
         <div class="ac-list" id="acList"></div>
       </div>
+    </div>
+    <div class="field" id="oCountryField" style="display:none"><label>País de origen del activo</label>
+      <select id="oCountry">
+        <option value="">— Seleccionar —</option>
+        <option value="AR">🇦🇷 Argentina</option>
+        <option value="US">🇺🇸 Estados Unidos</option>
+        <option value="CN">🇨🇳 China</option>
+        <option value="BR">🇧🇷 Brasil</option>
+        <option value="EU">🇪🇺 Europa</option>
+        <option value="OTHER">🌍 Otro</option>
+      </select>
     </div>
   </div>
   <div class="field"><label>Cantidad</label>
@@ -2025,6 +2036,33 @@ function makeLogo(ticker, type, size=26){
   img.onerror=()=>img.replaceWith(fb);
   return img;
 }
+// País de origen por ticker — para CEDEARs guardado en localStorage
+// Para otros tipos se infiere directamente del type
+const COUNTRY_STYLE = {
+  AR: { flag:'🇦🇷', bg:'#74b9ff22', border:'#74b9ffaa', text:'#2980b9' },
+  US: { flag:'🇺🇸', bg:'#dfe6e922', border:'#b2bec3aa', text:'#636e72' },
+  CN: { flag:'🇨🇳', bg:'#ff767522', border:'#ff7675aa', text:'#c0392b' },
+  BR: { flag:'🇧🇷', bg:'#55efc422', border:'#00b894aa', text:'#00695c' },
+  EU: { flag:'🇪🇺', bg:'#a29bfe22', border:'#6c5ce7aa', text:'#5f27cd' },
+  OTHER: { flag:'🌍', bg:'#dfe6e922', border:'#b2bec3aa', text:'#636e72' },
+};
+function getAssetCountry(ticker, type){
+  if(type==='Acción USA') return 'US';
+  if(type==='Acción Argentina' || type==='Bono/Renta Fija') return 'AR';
+  if(type==='Cripto') return null;
+  if(type==='CEDEAR'){
+    const saved = getTickerCountries();
+    return saved[(ticker||'').toUpperCase()] || null;
+  }
+  return null;
+}
+function countryBadge(ticker, type){
+  const country = getAssetCountry(ticker, type);
+  if(!country) return '';
+  const s = COUNTRY_STYLE[country] || COUNTRY_STYLE.OTHER;
+  return `<span style="display:inline-block;font-size:9px;padding:1px 5px;border-radius:4px;background:${s.bg};border:1px solid ${s.border};color:${s.text};margin-top:2px;line-height:1.4">${s.flag}</span>`;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PORTFOLIO CALC
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2927,7 +2965,7 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
     const cell=document.createElement('div');cell.className='asset-cell';
     cell.appendChild(makeLogo(a.ticker,a.type,26));
     const info=document.createElement('div');info.className='ainfo';
-    info.innerHTML=`<div class="tkr" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:var(--muted);text-underline-offset:3px" title="Ver fundamentales" onclick="openFundamentals('${a.ticker}','${a.type}')">${a.ticker}</div><div class="typ">${a.type}</div>`;
+    info.innerHTML=`<div class="tkr" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:var(--muted);text-underline-offset:3px" title="Ver fundamentales" onclick="openFundamentals('${a.ticker}','${a.type}')">${a.ticker}</div><div class="typ" style="display:flex;align-items:center;gap:4px">${a.type}${countryBadge(a.ticker,a.type)}</div>`;
     if(a.brkList?.length){
       const bd=document.createElement('div');bd.className='brks';
       a.brkList.forEach(b=>{const s=document.createElement('span');s.className='brk-tag';s.textContent=b;bd.appendChild(s);});
@@ -5078,7 +5116,29 @@ function onSellChange(){
     calcTotal();
   }
 }
-function onMarketChange(){el('oTicker').value='';hideAC();updatePriceCurrency();}
+function onMarketChange(){
+  el('oTicker').value='';hideAC();updatePriceCurrency();
+  const isCedear = el('oMarket').value==='cedear';
+  el('oCountryField').style.display = isCedear ? 'block' : 'none';
+  if(!isCedear) el('oCountry').value='';
+}
+// Cuando el usuario escribe el ticker en CEDEAR, pre-carga el país si ya lo guardó antes
+function onTickerChangeCountry(val){
+  if(el('oMarket').value !== 'cedear') return;
+  const t = (val||'').toUpperCase();
+  if(!t) return;
+  const saved = getTickerCountries();
+  if(saved[t]) el('oCountry').value = saved[t];
+}
+function getTickerCountries(){
+  try{ return JSON.parse(localStorage.getItem('pf6_ticker_countries')||'{}'); }catch(e){ return {}; }
+}
+function saveTickerCountry(ticker, country){
+  if(!ticker||!country) return;
+  const map = getTickerCountries();
+  map[ticker.toUpperCase()] = country;
+  localStorage.setItem('pf6_ticker_countries', JSON.stringify(map));
+}
 function updatePriceCurrency(){
   const mktVal=el('oMarket').value;
   const isA=(mktVal==='cedear'||mktVal==='arg'||mktVal==='bono');
@@ -5181,7 +5241,10 @@ function saveOrder(){
     date:orderDate,
     notes:finalNotes,
     expense: isGasto ? true : undefined,
+    country: (mktVal==='cedear' && el('oCountry').value) ? el('oCountry').value : undefined,
   });
+  // Guardar país por ticker para pre-cargar la próxima vez
+  if(mktVal==='cedear' && el('oCountry').value) saveTickerCountry(ticker, el('oCountry').value);
   // Auto-adjust de liquidez: cuando comprás/vendés un activo, ajusta automáticamente
   // el saldo de cash en el broker para reflejar el movimiento.
   //
@@ -5240,6 +5303,8 @@ function resetOrder(){
   el('oAction').value='Compra';el('oBroker').value='';
   el('oDate').value=new Date().toISOString().slice(0,10);
   el('oMarket').value='usa';
+  el('oCountry').value='';
+  el('oCountryField').style.display='none';
   onActionChange();updatePriceCurrency();
 }
 function quickOrder(ticker,type,action){
