@@ -440,6 +440,14 @@ body.dark #auth-welcome h2{color:#90caf9}
       </div>
       <!-- Chips de filtro por país -->
       <div id="assetCountryFilters" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center"></div>
+      <!-- Control de opacidad de badges de país -->
+      <div id="countryOpacityBar" style="display:none;align-items:center;gap:10px;margin-bottom:10px;padding:7px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;max-width:340px">
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap">🌍 Intensidad</span>
+        <input type="range" id="countryOpacitySlider" min="10" max="100" value="70" step="5"
+          oninput="setCountryBadgeOpacity(this.value)"
+          style="flex:1;accent-color:var(--blue);cursor:pointer">
+        <span id="countryOpacityVal" style="font-size:11px;color:var(--muted);min-width:30px;text-align:right">70%</span>
+      </div>
       <div id="assetTable"></div>
       <div id="cashSection" style="display:none;margin-top:12px">
         <div style="font-size:11px;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:8px">💰 LIQUIDEZ</div>
@@ -2060,26 +2068,38 @@ function getAssetCountry(ticker, type){
   }
   return null;
 }
-// Devuelve el HTML del div .typ — sólo el flag adelante, sin fondo (el color va en el tr)
-function typWithCountry(ticker, type){
-  const country = getAssetCountry(ticker, type);
-  if(!country) return `<div class="typ">${type}</div>`;
-  const s = COUNTRY_STYLE[country] || COUNTRY_STYLE.OTHER;
-  return `<div class="typ">${s.flag} ${type}</div>`;
+// Opacidad del badge de país (0-1), persiste en localStorage
+let _countryBadgeOpacity = parseFloat(localStorage.getItem('pf6_countryOpacity') || '0.7');
+function setCountryBadgeOpacity(val){
+  _countryBadgeOpacity = val / 100;
+  localStorage.setItem('pf6_countryOpacity', String(_countryBadgeOpacity));
+  const lbl = document.getElementById('countryOpacityVal');
+  if(lbl) lbl.textContent = val + '%';
+  // Re-pintar todos los badges ya renderizados sin re-render completo
+  document.querySelectorAll('.country-badge').forEach(el => {
+    el.style.opacity = _countryBadgeOpacity;
+  });
 }
-// Devuelve el color de fondo suave para la fila según país (rgba muy transparente)
-function rowBgForCountry(ticker, type){
+
+// Plaquita chiquita con siglas del país, al lado del ticker
+function countryBadgeTag(ticker, type){
   const country = getAssetCountry(ticker, type);
   if(!country) return '';
-  const MAP = {
-    AR:    'rgba(26,111,186,0.07)',
-    US:    'rgba(45,74,122,0.07)',
-    CN:    'rgba(176,28,28,0.07)',
-    BR:    'rgba(26,122,60,0.07)',
-    EU:    'rgba(74,45,138,0.07)',
-    OTHER: 'rgba(74,74,90,0.07)',
+  const COLORS = {
+    AR:    { bg:'#1a6fba', text:'#e8f4fd' },
+    US:    { bg:'#2d4a7a', text:'#c8d8f0' },
+    CN:    { bg:'#b01c1c', text:'#fce8e8' },
+    BR:    { bg:'#1a7a3c', text:'#e0f7ea' },
+    EU:    { bg:'#4a2d8a', text:'#e8e0f7' },
+    OTHER: { bg:'#4a4a5a', text:'#e0e0ea' },
   };
-  return MAP[country] || '';
+  const c = COLORS[country] || COLORS.OTHER;
+  return `<span class="country-badge" style="display:inline-block;font-size:9px;font-weight:800;padding:1px 5px;border-radius:4px;background:${c.bg};color:${c.text};letter-spacing:0.5px;vertical-align:middle;margin-left:5px;opacity:${_countryBadgeOpacity}">${country}</span>`;
+}
+
+// .typ sin decoración extra (el badge va al lado del ticker)
+function typWithCountry(ticker, type){
+  return `<div class="typ">${type}</div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -2230,8 +2250,19 @@ function renderCountryFilters(pf){
   });
   // Sólo mostrar el row si hay más de 1 país distinto (excluir __none__ del conteo)
   const realCountries = [...present.keys()].filter(k => k !== '__none__');
-  if(realCountries.length < 2 && !present.has('__none__')){ wrap.style.display='none'; return; }
-  wrap.style.display = 'flex';
+  const hasAnyCountry = realCountries.length > 0;
+  if(realCountries.length < 2 && !present.has('__none__')){ wrap.style.display='none'; }
+  else { wrap.style.display = 'flex'; }
+  // Barra de opacidad: mostrar si hay al menos 1 activo con país asignado
+  const opBar = document.getElementById('countryOpacityBar');
+  if(opBar){
+    opBar.style.display = hasAnyCountry ? 'flex' : 'none';
+    const slider = document.getElementById('countryOpacitySlider');
+    const lbl    = document.getElementById('countryOpacityVal');
+    if(slider){ slider.value = Math.round(_countryBadgeOpacity * 100); }
+    if(lbl)   { lbl.textContent = Math.round(_countryBadgeOpacity * 100) + '%'; }
+  }
+  if(realCountries.length < 2 && !present.has('__none__')) return;
   let html = '<span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-right:4px">País:</span>';
   COUNTRY_FILTER_DEFS.forEach(def => {
     if(!present.has(def.id)) return;
@@ -3040,14 +3071,12 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
           ? (isARS(a.type) ? $a(a.cost*c) : $u(a.cost)) + ' <span style="font-size:9px;color:var(--muted)">(costo)</span>'
           : '—');
     const tr=document.createElement('tr');
-    const _rowBg = rowBgForCountry(a.ticker, a.type);
-    if(_rowBg) tr.style.background = _rowBg;
     // Asset cell
     const td=document.createElement('td');
     const cell=document.createElement('div');cell.className='asset-cell';
     cell.appendChild(makeLogo(a.ticker,a.type,26));
     const info=document.createElement('div');info.className='ainfo';
-    info.innerHTML=`<div class="tkr" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:var(--muted);text-underline-offset:3px" title="Ver fundamentales" onclick="openFundamentals('${a.ticker}','${a.type}')">${a.ticker}</div>${typWithCountry(a.ticker,a.type)}`;
+    info.innerHTML=`<div class="tkr" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:var(--muted);text-underline-offset:3px" title="Ver fundamentales" onclick="openFundamentals('${a.ticker}','${a.type}')">${a.ticker}${countryBadgeTag(a.ticker,a.type)}</div>${typWithCountry(a.ticker,a.type)}`;
     if(a.brkList?.length){
       const bd=document.createElement('div');bd.className='brks';
       a.brkList.forEach(b=>{const s=document.createElement('span');s.className='brk-tag';s.textContent=b;bd.appendChild(s);});
