@@ -2084,8 +2084,8 @@ function setCountryBadgeOpacity(val){
 
 // Fondo de fila según país y opacidad actual
 const _COUNTRY_RGB = {
-  AR:'26,111,186', US:'45,74,122', CN:'176,28,28',
-  BR:'26,122,60',  EU:'74,45,138', OTHER:'74,74,90',
+  AR:'0,180,255',  US:'30,100,255', CN:'200,30,30',
+  BR:'0,160,70',   EU:'100,60,220', OTHER:'100,100,120',
 };
 function _countryRowBg(country){
   const rgb = _COUNTRY_RGB[country] || _COUNTRY_RGB.OTHER;
@@ -2097,12 +2097,12 @@ function countryBadgeTag(ticker, type){
   const country = getAssetCountry(ticker, type);
   if(!country) return '';
   const COLORS = {
-    AR:    { bg:'#1a6fba', text:'#e8f4fd' },
-    US:    { bg:'#2d4a7a', text:'#c8d8f0' },
-    CN:    { bg:'#b01c1c', text:'#fce8e8' },
-    BR:    { bg:'#1a7a3c', text:'#e0f7ea' },
-    EU:    { bg:'#4a2d8a', text:'#e8e0f7' },
-    OTHER: { bg:'#4a4a5a', text:'#e0e0ea' },
+    AR:    { bg:'#00b4ff', text:'#003a52' },
+    US:    { bg:'#1e64ff', text:'#dce8ff' },
+    CN:    { bg:'#c81e1e', text:'#fce8e8' },
+    BR:    { bg:'#00a046', text:'#e0f7ea' },
+    EU:    { bg:'#643cdc', text:'#ede0ff' },
+    OTHER: { bg:'#646478', text:'#e0e0ea' },
   };
   const c = COLORS[country] || COLORS.OTHER;
   return `<span class="country-badge" style="display:inline-block;font-size:9px;font-weight:800;padding:1px 5px;border-radius:4px;background:${c.bg};color:${c.text};letter-spacing:0.5px;vertical-align:middle;margin-left:5px">${country}</span>`;
@@ -2229,12 +2229,12 @@ function renderAssetTypeFilters(pf){
 let hiddenCountries = new Set(safeParse('pf6_hiddenCountries', []));
 
 const COUNTRY_FILTER_DEFS = [
-  { id:'US',    label:'EE.UU.',    icon:'🇺🇸', chipBg:'#2d4a7a', chipText:'#c8d8f0' },
-  { id:'AR',    label:'Argentina', icon:'🇦🇷', chipBg:'#1a6fba', chipText:'#e8f4fd' },
-  { id:'CN',    label:'China',     icon:'🇨🇳', chipBg:'#b01c1c', chipText:'#fce8e8' },
-  { id:'BR',    label:'Brasil',    icon:'🇧🇷', chipBg:'#1a7a3c', chipText:'#e0f7ea' },
-  { id:'EU',    label:'Europa',    icon:'🇪🇺', chipBg:'#4a2d8a', chipText:'#e8e0f7' },
-  { id:'OTHER', label:'Otro',      icon:'🌍', chipBg:'#4a4a5a', chipText:'#e0e0ea' },
+  { id:'US',    label:'EE.UU.',    icon:'🇺🇸', chipBg:'#1e64ff', chipText:'#dce8ff' },
+  { id:'AR',    label:'Argentina', icon:'🇦🇷', chipBg:'#00b4ff', chipText:'#003a52' },
+  { id:'CN',    label:'China',     icon:'🇨🇳', chipBg:'#c81e1e', chipText:'#fce8e8' },
+  { id:'BR',    label:'Brasil',    icon:'🇧🇷', chipBg:'#00a046', chipText:'#e0f7ea' },
+  { id:'EU',    label:'Europa',    icon:'🇪🇺', chipBg:'#643cdc', chipText:'#ede0ff' },
+  { id:'OTHER', label:'Otro',      icon:'🌍', chipBg:'#646478', chipText:'#e0e0ea' },
   { id:'__none__', label:'Sin país', icon:'❓', chipBg:'#555', chipText:'#ddd' },
 ];
 
