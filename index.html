@@ -443,10 +443,10 @@ body.dark #auth-welcome h2{color:#90caf9}
       <!-- Control de opacidad de badges de país -->
       <div id="countryOpacityBar" style="display:none;align-items:center;gap:10px;margin-bottom:10px;padding:7px 12px;background:var(--card);border:1px solid var(--border);border-radius:8px;max-width:340px">
         <span style="font-size:11px;color:var(--muted);white-space:nowrap">🌍 Intensidad</span>
-        <input type="range" id="countryOpacitySlider" min="10" max="100" value="70" step="5"
+        <input type="range" id="countryOpacitySlider" min="2" max="40" value="8" step="1"
           oninput="setCountryBadgeOpacity(this.value)"
           style="flex:1;accent-color:var(--blue);cursor:pointer">
-        <span id="countryOpacityVal" style="font-size:11px;color:var(--muted);min-width:30px;text-align:right">70%</span>
+        <span id="countryOpacityVal" style="font-size:11px;color:var(--muted);min-width:30px;text-align:right">8%</span>
       </div>
       <div id="assetTable"></div>
       <div id="cashSection" style="display:none;margin-top:12px">
@@ -2068,17 +2068,28 @@ function getAssetCountry(ticker, type){
   }
   return null;
 }
-// Opacidad del badge de país (0-1), persiste en localStorage
-let _countryBadgeOpacity = parseFloat(localStorage.getItem('pf6_countryOpacity') || '0.7');
+// Opacidad del fondo de fila por país (0-1), persiste en localStorage
+let _countryRowOpacity = parseFloat(localStorage.getItem('pf6_countryOpacity') || '0.08');
 function setCountryBadgeOpacity(val){
-  _countryBadgeOpacity = val / 100;
-  localStorage.setItem('pf6_countryOpacity', String(_countryBadgeOpacity));
+  _countryRowOpacity = val / 100;
+  localStorage.setItem('pf6_countryOpacity', String(_countryRowOpacity));
   const lbl = document.getElementById('countryOpacityVal');
   if(lbl) lbl.textContent = val + '%';
-  // Re-pintar todos los badges ya renderizados sin re-render completo
-  document.querySelectorAll('.country-badge').forEach(el => {
-    el.style.opacity = _countryBadgeOpacity;
+  // Re-pintar fondos de filas sin re-render completo
+  document.querySelectorAll('tr[data-country]').forEach(tr => {
+    const bg = _countryRowBg(tr.dataset.country);
+    tr.style.background = bg;
   });
+}
+
+// Fondo de fila según país y opacidad actual
+const _COUNTRY_RGB = {
+  AR:'26,111,186', US:'45,74,122', CN:'176,28,28',
+  BR:'26,122,60',  EU:'74,45,138', OTHER:'74,74,90',
+};
+function _countryRowBg(country){
+  const rgb = _COUNTRY_RGB[country] || _COUNTRY_RGB.OTHER;
+  return `rgba(${rgb},${_countryRowOpacity})`;
 }
 
 // Plaquita chiquita con siglas del país, al lado del ticker
@@ -2094,7 +2105,7 @@ function countryBadgeTag(ticker, type){
     OTHER: { bg:'#4a4a5a', text:'#e0e0ea' },
   };
   const c = COLORS[country] || COLORS.OTHER;
-  return `<span class="country-badge" style="display:inline-block;font-size:9px;font-weight:800;padding:1px 5px;border-radius:4px;background:${c.bg};color:${c.text};letter-spacing:0.5px;vertical-align:middle;margin-left:5px;opacity:${_countryBadgeOpacity}">${country}</span>`;
+  return `<span class="country-badge" style="display:inline-block;font-size:9px;font-weight:800;padding:1px 5px;border-radius:4px;background:${c.bg};color:${c.text};letter-spacing:0.5px;vertical-align:middle;margin-left:5px">${country}</span>`;
 }
 
 // .typ sin decoración extra (el badge va al lado del ticker)
@@ -2259,8 +2270,8 @@ function renderCountryFilters(pf){
     opBar.style.display = hasAnyCountry ? 'flex' : 'none';
     const slider = document.getElementById('countryOpacitySlider');
     const lbl    = document.getElementById('countryOpacityVal');
-    if(slider){ slider.value = Math.round(_countryBadgeOpacity * 100); }
-    if(lbl)   { lbl.textContent = Math.round(_countryBadgeOpacity * 100) + '%'; }
+    if(slider){ slider.value = Math.round(_countryRowOpacity * 100); }
+    if(lbl)   { lbl.textContent = Math.round(_countryRowOpacity * 100) + '%'; }
   }
   if(realCountries.length < 2 && !present.has('__none__')) return;
   let html = '<span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-right:4px">País:</span>';
@@ -3071,6 +3082,11 @@ function renderTable(pf, containerId, totVal, totPnL, brokerCtx){
           ? (isARS(a.type) ? $a(a.cost*c) : $u(a.cost)) + ' <span style="font-size:9px;color:var(--muted)">(costo)</span>'
           : '—');
     const tr=document.createElement('tr');
+    const _trCountry = getAssetCountry(a.ticker, a.type);
+    if(_trCountry){
+      tr.dataset.country = _trCountry;
+      tr.style.background = _countryRowBg(_trCountry);
+    }
     // Asset cell
     const td=document.createElement('td');
     const cell=document.createElement('div');cell.className='asset-cell';
